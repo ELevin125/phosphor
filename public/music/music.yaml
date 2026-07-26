@@ -1,0 +1,58 @@
+# The music library.
+#
+# Drop an audio file in this folder, add a row here, then run:
+#   npm run analyse-music
+#
+# Every row needs a licence and a source URL. Not bureaucracy — these videos go
+# on a public page for a game you intend to sell, and "I found it on a
+# royalty-free site" is not a licence you can point at eight months from now
+# when a track gets claimed. If you cannot fill in `licence` and `source`,
+# don't use the track.
+#
+# attribution: the exact string that must appear in the video description.
+#   Leave it null only when the licence genuinely requires nothing (Pixabay's
+#   own licence, for instance). CC-BY always requires it.
+#
+# mood: free-form tags, so a video can ask for a feel rather than a filename.
+
+tracks:
+  # NOTE: source and licence below are INFERRED from the filenames — the
+  # trailing numeric ids are Pixabay's. Confirm both before publishing, and
+  # paste the real page URLs in. If either track did not come from Pixabay,
+  # these rows are wrong.
+  - id: prettyjohn1-synthwave-526520
+    title: Synthwave
+    artist: prettyjohn1
+    source: https://pixabay.com/music/-526520/    # CONFIRM
+    licence: Pixabay Content License              # CONFIRM
+    attribution: null
+    mood: [synthwave, driving]
+    tempo: 97.5
+
+  - id: soulfuljamtracks-synthwave-background-560002
+    title: Synthwave Background
+    artist: soulfuljamtracks
+    source: https://pixabay.com/music/-560002/    # CONFIRM
+    licence: Pixabay Content License              # CONFIRM
+    attribution: null
+    mood: [synthwave, background, upbeat]
+    tempo: 129.2
+
+# Example of a filled-in row:
+#
+# tracks:
+#   - id: lofi-01                     # filename without extension
+#     title: Rainy Window
+#     artist: Some Artist
+#     source: https://pixabay.com/music/...
+#     licence: Pixabay Content License
+#     attribution: null
+#     mood: [lofi, calm, night]
+#
+#   - id: synth-01
+#     title: Neon Overpass
+#     artist: Another Artist
+#     source: https://uppbeat.io/t/...
+#     licence: Uppbeat Free (credit required)
+#     attribution: "Music from Uppbeat: https://uppbeat.io/t/... — licence ABC123"
+#     mood: [synthwave, driving, upbeat]

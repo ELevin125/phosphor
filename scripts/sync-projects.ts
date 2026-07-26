@@ -1,0 +1,215 @@
+/**
+ * Discovers video projects and generates src/registry.generated.ts.
+ *
+ * Projects live in projects/<slug>/ and are user data, not part of the engine
+ * — they are gitignored, so the set of them differs on every checkout. Root.tsx
+ * therefore cannot import them by name; it reads this generated registry.
+ *
+ * A project is any projects/<slug>/ containing a beats.yaml. It contributes a
+ * composition when it also has a built beats.generated.ts — without one there
+ * are no timings, so the project is reported as unbuilt and skipped rather than
+ * emitted as a broken import.
+ *
+ * Composition ids stay `<slug>-<theme>`, which render.sh and contact-sheet.sh
+ * both parse.
+ *
+ * Set PHOSPHOR_THEMES=1 when running the studio to register every project
+ * against every theme instead of only its chosen one. That is the theme-picking
+ * harness; it is off by default because it multiplies the sidebar by ten.
+ */
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parse } from 'yaml';
+
+const ROOT = process.cwd();
+const PROJECTS_DIR = join(ROOT, 'projects');
+const OUT = join(ROOT, 'src', 'registry.generated.ts');
+
+/** Theme used when beats.yaml does not name one. */
+const DEFAULT_THEME = 'gizmo';
+
+/**
+ * The theme-picking harness: register every project against every theme.
+ *
+ * Expanded here rather than in Root.tsx because this runs in node, where the
+ * environment is simply available — reading it from inside the bundle would
+ * depend on how Remotion forwards env vars to the browser.
+ */
+const ALL_THEMES = process.env.PHOSPHOR_THEMES === '1';
+
+/** Theme names, read from the source of truth rather than duplicated here. */
+const themeNames = (): string[] => {
+  const src = readFileSync(join(ROOT, 'src', 'theme', 'index.ts'), 'utf8');
+  const m = src.match(/export const themes\s*=\s*\{([^}]*)\}/);
+  if (!m?.[1]) {
+    throw new Error('Could not find the themes object in src/theme/index.ts');
+  }
+  return m[1]
+    .split(',')
+    .map((s) => s.trim().split(':')[0]?.trim() ?? '')
+    .filter((s) => s.length > 0);
+};
+
+type Variant = {
+  /** Suffix appended to the slug, e.g. `board` -> `value-vs-reference-board-<theme>`. */
+  id: string;
+  /** Module basename inside the project dir, without extension. */
+  component: string;
+  /** Named export to pull out of that module. */
+  export?: string;
+};
+
+type BeatsFile = {
+  slug?: string;
+  theme?: string;
+  variants?: Variant[];
+};
+
+type Entry = {
+  /** Composition id minus the `-<theme>` suffix. */
+  base: string;
+  /** Import specifier for the component module. */
+  module: string;
+  export: string;
+  /** Import specifier for the timings module. */
+  timings: string;
+  /** Themes to register this component against — one, unless PHOSPHOR_THEMES=1. */
+  themes: string[];
+  /** Unique, valid JS identifier used for this entry's imports. */
+  ident: string;
+};
+
+/** `flow-field` -> `flowField`, so it can be used as an import binding. */
+const toIdent = (s: string): string =>
+  s.replace(/[^a-zA-Z0-9]+(.)?/g, (_, c: string | undefined) => (c ? c.toUpperCase() : ''));
+
+const discover = (): { entries: Entry[]; unbuilt: string[] } => {
+  if (!existsSync(PROJECTS_DIR)) {
+    return { entries: [], unbuilt: [] };
+  }
+
+  const entries: Entry[] = [];
+  const unbuilt: string[] = [];
+
+  const slugs = readdirSync(PROJECTS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+
+  for (const slug of slugs) {
+    const dir = join(PROJECTS_DIR, slug);
+    const yamlPath = join(dir, 'beats.yaml');
+    if (!existsSync(yamlPath)) {
+      continue;
+    }
+
+    // A project without built timings has no duration or fps, so there is
+    // nothing to register. Name it so the fix is obvious.
+    if (!existsSync(join(dir, 'beats.generated.ts'))) {
+      unbuilt.push(slug);
+      continue;
+    }
+
+    const doc = (parse(readFileSync(yamlPath, 'utf8')) as BeatsFile | null) ?? {};
+    const themes = ALL_THEMES ? themeNames() : [doc.theme ?? DEFAULT_THEME];
+    const timings = `@projects/${slug}/beats.generated`;
+
+    entries.push({
+      base: slug,
+      module: `@projects/${slug}/Video`,
+      export: 'Video',
+      timings,
+      themes,
+      ident: toIdent(slug),
+    });
+
+    // Variants reuse the project's timings with a different component — the
+    // same script cut against a different layout, so the two can be compared
+    // frame for frame.
+    for (const v of doc.variants ?? []) {
+      entries.push({
+        base: `${slug}-${v.id}`,
+        module: `@projects/${slug}/${v.component}`,
+        export: v.export ?? v.component,
+        timings,
+        themes,
+        ident: toIdent(`${slug}-${v.id}`),
+      });
+    }
+  }
+
+  return { entries, unbuilt };
+};
+
+const render = (entries: Entry[]): string => {
+  const imports = entries
+    .flatMap((e) => [
+      `import { ${e.export} as ${e.ident}Component } from '${e.module}';`,
+      `import { FPS as ${e.ident}Fps, TOTAL_FRAMES as ${e.ident}Frames } from '${e.timings}';`,
+    ])
+    .join('\n');
+
+  const rows = entries
+    .flatMap((e) =>
+      e.themes.map(
+        (theme) =>
+          `  {\n` +
+          `    base: '${e.base}',\n` +
+          `    component: ${e.ident}Component as ProjectComponent,\n` +
+          `    fps: ${e.ident}Fps,\n` +
+          `    durationInFrames: ${e.ident}Frames,\n` +
+          `    theme: '${theme}' as ThemeName,\n` +
+          `  },`,
+      ),
+    )
+    .join('\n');
+
+  return `/* GENERATED by scripts/sync-projects.ts — do not edit.
+ * Run 'npm run sync' after adding, removing or renaming a project. */
+import type { ComponentType } from 'react';
+import type { ThemeName } from '@theme';
+
+/** Every video component takes the theme to render in plus the debug overlay flag. */
+export type ProjectComponent = ComponentType<{
+  readonly theme: ThemeName;
+  readonly debug: boolean;
+}>;
+
+export type ProjectEntry = {
+  /** Composition id without the trailing \`-<theme>\`. */
+  readonly base: string;
+  readonly component: ProjectComponent;
+  readonly fps: number;
+  readonly durationInFrames: number;
+  /** The theme this project ships in. */
+  readonly theme: ThemeName;
+};
+
+${imports || '// No projects found in projects/.'}
+
+export const PROJECTS: readonly ProjectEntry[] = [
+${rows}
+];
+`;
+};
+
+const { entries, unbuilt } = discover();
+writeFileSync(OUT, render(entries));
+
+if (entries.length === 0) {
+  console.log('› no projects registered — add one under projects/<slug>/');
+} else {
+  let count = 0;
+  for (const e of entries) {
+    console.log(`  ${e.base}-${e.themes.length === 1 ? e.themes[0] : `{${e.themes.length} themes}`}`);
+    count += e.themes.length;
+  }
+  console.log(`› registered ${count} composition${count === 1 ? '' : 's'}`);
+  if (!ALL_THEMES) {
+    console.log('  (PHOSPHOR_THEMES=1 to register every theme for comparison)');
+  }
+}
+
+for (const slug of unbuilt) {
+  console.warn(`  ! ${slug} has no beats.generated.ts — run 'npm run build-beats ${slug}'`);
+}

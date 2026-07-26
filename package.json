@@ -1,0 +1,44 @@
+{
+  "name": "phosphor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Programmatic short-form programming explainers (1080x1920, 30fps) built with Remotion.",
+  "scripts": {
+    "sync": "tsx scripts/sync-projects.ts && tsx scripts/analyse-music.ts",
+    "studio": "remotion studio",
+    "prestudio": "npm run sync",
+    "build-beats": "tsx scripts/build-beats.ts",
+    "postbuild-beats": "tsx scripts/sync-projects.ts",
+    "render": "./scripts/render.sh",
+    "prerender": "npm run sync",
+    "contact-sheet": "./scripts/contact-sheet.sh",
+    "retime": "tsx scripts/retime.ts",
+    "analyse-music": "tsx scripts/analyse-music.ts",
+    "process-vo": "tsx scripts/process-vo.ts",
+    "typecheck": "tsc --noEmit",
+    "pretypecheck": "npm run sync"
+  },
+  "dependencies": {
+    "@remotion/captions": "4.0.499",
+    "@remotion/cli": "4.0.499",
+    "@remotion/google-fonts": "4.0.499",
+    "@remotion/install-whisper-cpp": "4.0.499",
+    "@remotion/media": "4.0.499",
+    "@remotion/shapes": "4.0.499",
+    "@shikijs/core": "4.3.1",
+    "@shikijs/engine-javascript": "4.3.1",
+    "@shikijs/langs": "4.3.1",
+    "@shikijs/themes": "4.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "4.0.499",
+    "shiki": "4.3.1",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3"
+  }
+}
