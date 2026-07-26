@@ -87,9 +87,14 @@ projects/my-video/
 Then:
 
 ```bash
-npm run build-beats my-video   # beats.yaml -> generated timings
+npm run build my-video   # runs whatever the pipeline needs
 npm run studio
 ```
+
+`npm run build` is the one command worth remembering. It knows the pipeline's
+dependency order and skips any stage whose inputs haven't changed, so it is
+always safe to run and cheap when there is nothing to do. `--force` rebuilds
+everything; `--dry` shows what it would do.
 
 Registration is automatic — `npm run sync` scans `projects/` and writes
 `src/registry.generated.ts`, and it runs ahead of `studio`, `render` and
@@ -101,13 +106,16 @@ This is the part that saves the most time, and it never sends audio anywhere.
 
 1. Record yourself reading `script.md`. Save it to
    `public/videos/<slug>/vo.wav`.
-2. `npm run process-vo <slug>` — high-pass, compression, de-essing, silence
-   trimming, and two-pass EBU R128 normalisation to −16 LUFS. Non-destructive:
-   your recording is kept as `vo.raw.wav` and every run works from that copy, so
-   settings can be re-tried freely.
-3. `npm run retime <slug>` — transcribes locally with whisper.cpp, then aligns
-   the script against the transcript with Needleman–Wunsch and rewrites every
-   beat duration from the real word timings.
+2. `npm run build <slug>` — or the stages individually:
+
+`npm run process-vo <slug>` does high-pass, compression, de-essing, silence
+trimming, and two-pass EBU R128 normalisation to −16 LUFS. It is
+non-destructive: your recording is kept as `vo.raw.wav` and every run works from
+that copy, so settings can be re-tried freely.
+
+`npm run retime <slug>` transcribes locally with whisper.cpp, then aligns the
+script against the transcript with Needleman–Wunsch and rewrites every beat
+duration from the real word timings.
 
 The alignment step is why improvising is survivable. If you paraphrase a line,
 the mismatch is absorbed locally instead of desynchronising every beat after it,
@@ -118,6 +126,21 @@ genuinely diverged.
 Tune the audio by **measuring**, not by reaching for a preset. Octave-band
 levels will tell you whether "nasal" is a midrange peak to cut or, far more
 often, a missing bottom octave to lift.
+
+Settings live with the video, in a `vo:` block in its `beats.yaml`:
+
+```yaml
+vo:
+  bass: 6     # low shelf at 200Hz — the cure for a thin voice
+  hpf: 65     # high-pass corner
+  mid: -2     # peaking cut...
+  midf: 550   # ...centred here
+```
+
+CLI flags override the block, and `process-vo` prints any flag you passed that
+isn't in it yet, so an experiment that worked can be made permanent. This
+matters more than it looks: a chain tuned by flags alone exists only in your
+shell history, and the next run months later silently gives you the defaults.
 
 ## Music
 

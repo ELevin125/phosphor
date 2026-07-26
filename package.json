@@ -4,6 +4,7 @@
   "private": true,
   "description": "Programmatic short-form programming explainers (1080x1920, 30fps) built with Remotion.",
   "scripts": {
+    "build": "tsx scripts/build.ts",
     "sync": "tsx scripts/sync-projects.ts && tsx scripts/analyse-music.ts",
     "studio": "remotion studio",
     "prestudio": "npm run sync",

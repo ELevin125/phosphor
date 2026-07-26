@@ -1,11 +1,11 @@
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
-import { useBeat } from './Beat';
-import { CodePanel, defaultRowStyle, type RowStyle } from './code/CodePanel';
-import { expandLineSpec } from './code/diff';
-import { dedent, highlight, type CodeLang } from './code/highlighter';
-import { useGestureStyle, type Gesture } from './motion';
-import { useTheme } from './ThemeContext';
+import { useBeat } from '../Beat';
+import { CodePanel, defaultRowStyle, type RowStyle } from './CodePanel';
+import { expandLineSpec } from './diff';
+import { dedent, highlight, type CodeLang } from './highlighter';
+import { useGestureStyle, type Gesture } from '../motion';
+import { useTheme } from '../ThemeContext';
 
 export type LineSpec = readonly (number | readonly [number, number])[];
 

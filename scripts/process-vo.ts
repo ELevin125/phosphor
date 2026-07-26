@@ -39,8 +39,9 @@
  * platform squashing the result.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, renameSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 
 const slug = process.argv[2];
 if (!slug || slug.startsWith('--')) {
@@ -54,9 +55,66 @@ if (!slug || slug.startsWith('--')) {
 }
 
 const args = process.argv.slice(3);
+
+/**
+ * Per-video settings, from the `vo:` block in projects/<slug>/beats.yaml.
+ *
+ * A voice needs different treatment in different rooms, and the settings that
+ * make one recording sound right are a property of that recording — not of this
+ * script. Passing them as flags means the only record of them is your shell
+ * history, so re-running the chain months later silently gives you the defaults
+ * and a voice that sounds wrong for reasons nobody can reconstruct.
+ *
+ * Precedence: CLI flag > beats.yaml > the default in this file.
+ */
+type VoConfig = Record<string, number | boolean | undefined>;
+
+const loadVoConfig = (): VoConfig => {
+  const path = join(process.cwd(), 'projects', slug, 'beats.yaml');
+  if (!existsSync(path)) {
+    return {};
+  }
+  const doc = parse(readFileSync(path, 'utf8')) as { vo?: VoConfig } | null;
+  return doc?.vo ?? {};
+};
+
+const cfg = loadVoConfig();
+
+/**
+ * Settings passed as flags exist only in shell history. Once they are the ones
+ * that sound right they belong in beats.yaml, beside the video they describe —
+ * otherwise the next run of this script quietly reverts them and the reason the
+ * voice sounded right is gone.
+ */
+function suggestPersist(): void {
+  const passed = args
+    .map((a, i) => ({ a, next: args[i + 1] }))
+    .filter(({ a }) => a.startsWith('--') && a !== '--dry')
+    .map(({ a, next }) => {
+      const name = a.slice(2);
+      const numeric = next !== undefined && !next.startsWith('--') && Number.isFinite(Number(next));
+      return { name, value: numeric ? Number(next) : true };
+    })
+    .filter(({ name, value }) => cfg[name] !== value);
+
+  if (passed.length === 0) {
+    return;
+  }
+
+  console.log('\n  not in beats.yaml yet — persist to reproduce this next time:');
+  console.log('\n    vo:');
+  for (const { name, value } of passed) {
+    console.log(`      ${name}: ${value}`);
+  }
+}
+
 const flag = (name: string, fallback: number): number => {
   const i = args.indexOf(`--${name}`);
   if (i === -1) {
+    const fromYaml = cfg[name];
+    if (typeof fromYaml === 'number') {
+      return fromYaml;
+    }
     return fallback;
   }
   const v = Number(args[i + 1]);
@@ -114,7 +172,8 @@ const MID = flag('mid', 0);
 const MIDF = flag('midf', 900);
 /** High-pass corner in Hz. Drop it if the voice is low-pitched and thin. */
 const HPF = flag('hpf', 80);
-const DENOISE = args.includes('--denoise');
+const DENOISE = args.includes('--denoise') || cfg.denoise === true;
+/** CLI-only: an action, not a setting, so it has no place in beats.yaml. */
 const DRY = args.includes('--dry');
 
 const dir = join(process.cwd(), 'public', 'videos', slug);
@@ -444,6 +503,7 @@ if (wanted > MAX_PUSH) {
 if (DRY) {
   console.log('\n--dry: nothing written.');
   console.log(`  would apply: ${chain(push, LOUDNORM)}`);
+  suggestPersist();
   process.exit(0);
 }
 
@@ -509,4 +569,6 @@ if (drift > 1) {
 
 console.log(`\n✓ ${out} (${(statSync(out).size / 1e6).toFixed(1)} MB)`);
 console.log('  original untouched at vo.raw.wav — re-run with different flags any time.');
-console.log(`  next: npm run retime ${slug}`);
+
+console.log(`\n  next: npm run retime ${slug}`);
+suggestPersist();

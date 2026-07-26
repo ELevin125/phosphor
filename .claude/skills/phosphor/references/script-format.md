@@ -51,9 +51,22 @@ Don't:
 
 ```yaml
 slug: value-vs-reference
+theme: midnight          # the theme this video ships in; registration is automatic
 title: Why your struct didn't change
 lang: csharp
 fps: 30
+
+# Optional. Voiceover chain settings for THIS recording — see SKILL.md.
+# CLI flags to process-vo override these.
+vo:
+  bass: 6
+  hpf: 65
+
+# Optional. Extra compositions from the same timings with a different
+# component, for comparing two layouts frame for frame.
+variants:
+  - id: board            # -> composition `value-vs-reference-board-midnight`
+    component: VideoBoard
 
 beats:
   - id: hook               # matches <Beat id="hook">, must be unique
@@ -72,6 +85,9 @@ beats:
 - `id` is the contract between the yaml and the TSX. A `<Beat>` whose id is not
   in the yaml throws at render with a message telling you to run `build-beats`.
 
+- `theme` names one of the themes in `src/theme/`. Nothing else registers the
+  video — `npm run sync` reads this.
+
 Regenerate after every edit:
 ```bash
 npm run build-beats value-vs-reference
@@ -81,6 +97,13 @@ npm run build-beats value-vs-reference
 
 ```bash
 # 1. save the recording to public/videos/<slug>/vo.wav
+npm run build value-vs-reference     # process-vo, retime, build-beats, sync
+```
+
+`npm run build` runs only the stages whose inputs changed, so it is safe to run
+at any point. To drive a single stage directly:
+
+```bash
 npm run retime value-vs-reference
 ```
 

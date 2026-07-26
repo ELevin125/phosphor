@@ -10,8 +10,8 @@ export { Beat, Timeline, totalDuration, useBeat, useBeatStart, type BeatTiming, 
 export { Board, Node, type NodeProps } from './Board';
 
 export { TitleCard, type TitleCardProps } from './TitleCard';
-export { CodeReveal, type CodeRevealProps, type LineSpec } from './CodeReveal';
-export { CodeDiff, type CodeDiffProps } from './CodeDiff';
+export { CodeReveal, type CodeRevealProps, type LineSpec } from './code/CodeReveal';
+export { CodeDiff, type CodeDiffProps } from './code/CodeDiff';
 export { Callout, type CalloutProps, type CalloutTone } from './Callout';
 export { Arrow, type ArrowProps, type ArrowDirection } from './Arrow';
 export { Box, Row, Stack, type BoxProps, type BoxTone } from './Box';

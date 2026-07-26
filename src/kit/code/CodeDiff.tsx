@@ -1,10 +1,10 @@
 import React from 'react';
 import { interpolate } from 'remotion';
-import { CodePanel, defaultRowStyle, type RowStyle } from './code/CodePanel';
-import { diffLines } from './code/diff';
-import { dedent, highlight, type CodeLang } from './code/highlighter';
-import { useGestureStyle, useReveal } from './motion';
-import { useTheme } from './ThemeContext';
+import { CodePanel, defaultRowStyle, type RowStyle } from './CodePanel';
+import { diffLines } from './diff';
+import { dedent, highlight, type CodeLang } from './highlighter';
+import { useGestureStyle, useReveal } from '../motion';
+import { useTheme } from '../ThemeContext';
 
 export type CodeDiffProps = {
   readonly before: string;

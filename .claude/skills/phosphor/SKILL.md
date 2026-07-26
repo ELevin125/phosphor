@@ -151,17 +151,26 @@ stay in Phase 1.
 
 Save it to `public/videos/<slug>/vo.wav`, then:
 ```bash
-npm run process-vo <slug>  # clean up + normalise to -16 LUFS
-npm run retime <slug>      # transcribe, re-time beats, regenerate
+npm run build <slug>   # process-vo -> retime -> build-beats -> sync
 ```
 Then run the QA loop again — real timings expose holds the estimate hid.
+
+`npm run build` knows the pipeline's dependency order and skips stages whose
+inputs have not changed. **Prefer it over running the stages by hand** — the
+failure mode it prevents is silent: re-record, forget to retime, and you get a
+finished video captioned from the previous take with no error anywhere.
+`--force` rebuilds everything, `--dry` shows the plan.
 
 `process-vo` is non-destructive: it keeps the original as `vo.raw.wav` and works
 from that copy forever after, so settings can be re-tried freely. Tune it by
 **measuring the voice**, not by reaching for a preset — octave-band levels tell
 you whether "nasal" is a midrange peak to cut or (far more often) a missing
-bottom octave to lift. Flags: `--bass --mid --midf --highs --deess --hpf --pad
---denoise --dry`.
+bottom octave to lift.
+
+**Settings belong in the `vo:` block of `beats.yaml`, not in flags.** Flags
+override the block and are for experimenting; once a setting is right, write it
+into the yaml or the next run reverts it. Available: `bass`, `mid`, `midf`,
+`highs`, `deess`, `hpf`, `lufs`, `pad`, `trim`, `denoise`. `--dry` is CLI-only.
 
 `retime` aligns script to transcript with Needleman-Wunsch, so improvising is
 survivable — it prints a fidelity score. **Below ~75% means the `vo` lines no
