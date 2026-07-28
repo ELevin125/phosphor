@@ -36,10 +36,35 @@ export type SceneProps = {
  * and it lets HTML annotations and SVG geometry interleave freely, which one
  * shared `<svg>` would not allow without `foreignObject`.
  */
+/**
+ * Height reserved at the bottom of the content box by a `<Split>`.
+ *
+ * A scene sizes itself from the layout law rather than from its parent, so a
+ * strip sharing the frame with it cannot simply be a sibling in a flex column —
+ * the scene would draw straight through it. `<Split>` publishes the reserved
+ * height here and the scene shortens itself by it.
+ */
+export const SceneInset = createContext<{ readonly bottom: number }>({ bottom: 0 });
+
+/**
+ * An exact height handed down by a parent that has already subdivided the frame
+ * — currently `<Versus>`, which gives each half a fixed pane.
+ *
+ * Kept here beside `SceneInset` so every rule about how tall a scene gets lives
+ * in one file. It overrides rather than adjusts: `SceneInset` says "the content
+ * box, less this much", which is still relative to the layout law, whereas a
+ * pane's height has already been decided and any further arithmetic against
+ * `CONTENT` would just undo it.
+ */
+export const SceneHeight = createContext<number | null>(null);
+
 export const Scene: React.FC<SceneProps> = ({ world, children }) => {
   const { captionBand } = useContext(LayoutContext);
+  const { bottom: inset } = useContext(SceneInset);
+  const fixed = useContext(SceneHeight);
   const width = CONTENT.width;
-  const height = (captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM) - CONTENT.top;
+  const height =
+    fixed ?? (captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM) - CONTENT.top - inset;
   const space = makeSpace(world, width, height);
 
   /*

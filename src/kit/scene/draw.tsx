@@ -1,12 +1,20 @@
 import React from 'react';
 import { useTheme } from '../ThemeContext';
+import type { ThemeColors } from '../../theme/types';
 import { Layer, useSpace } from './Scene';
 import type { Vec2 } from './space';
 
 export type Tone = 'accent' | 'accentAlt' | 'positive' | 'negative' | 'muted' | 'text';
 
-export const useTone = (tone: Tone = 'accent'): string => {
-  const { colors } = useTheme();
+/**
+ * Tone to colour, without the hook.
+ *
+ * Split out of `useTone` so a drawable that maps over a list can resolve a tone
+ * per item. Calling `useTone` inside a `.map` makes the hook count depend on
+ * how many items are currently revealed, which is the one thing React does not
+ * allow — and it fails as a render crash mid-beat rather than at build time.
+ */
+export const toneColor = (colors: ThemeColors, tone: Tone = 'accent'): string => {
   switch (tone) {
     case 'accentAlt':
       return colors.accentAlt;
@@ -22,6 +30,8 @@ export const useTone = (tone: Tone = 'accent'): string => {
       return colors.accent;
   }
 };
+
+export const useTone = (tone: Tone = 'accent'): string => toneColor(useTheme().colors, tone);
 
 /**
  * The background lattice.

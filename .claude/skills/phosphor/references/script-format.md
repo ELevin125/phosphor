@@ -22,21 +22,89 @@ Required sections:
 
 ## Writing the narration
 
-The voice is **plain and direct**. It is a developer explaining something to
-another developer, not a presenter.
+**This is the section that most often goes wrong. Read the examples, not just
+the rules.**
 
-Do:
-- Short declarative sentences. Full stops over commas.
-- Concrete nouns — `Vector3`, `struct`, `the method`. Not "this concept".
-- State the surprising thing flatly and let it be surprising.
-- Write contractions where they'd be spoken ("it's", "doesn't").
+The voice is one gamedev leaning over to another and talking them through
+something — mid-thought, already in progress. Not a presenter, and *not* a
+technical writer either. The most common failure is writing correct, tidy prose:
+it is accurate, it is readable, and it sounds like bullet points being recited.
 
-Don't:
-- "Have you ever wondered...", "Let's dive in", "But here's the crazy part"
+Every example below is a real line from a recorded video. Match this register.
+
+### The single biggest tell: open beats with a connective
+
+Seven of the ten beats in `flow-field` start with **So**, **Now**, **But**,
+**Or**, or **The thing is**. That is what makes a video feel like one continuous
+explanation instead of ten separate statements.
+
+> **So** we want to have a couple hundred enemies all chase after the player.
+> **So**, obvious fix, we just give them a pathfinding algorithm.
+> **The thing is**, all of these enemies effectively work towards the same target.
+> **Now** the enemies don't need to search themselves.
+> **Or** we can even make the enemies themselves count towards the grid.
+
+A beat that opens cold on its subject reads as a new slide. Cut the connective
+only when you deliberately want the jolt.
+
+### Let sentences run
+
+Speech connects clauses with commas and "and". Do not break them into tidy
+full stops — that is the stiffness.
+
+> Now in our grid, each cell will actually point to a neighbouring cell that
+> eventually points to the player, effectively giving us a calculation of how
+> cheap it is to move to the player through a given route.
+
+Thirty-six words, one sentence, and it plays fine. Comma splices are correct
+here:
+
+> Now the enemies don't need to search themselves, they can all just use this grid.
+
+### "We", never "you"
+
+The whole script is first person plural — *we, our grid, gives us*. It makes the
+viewer a collaborator working the problem alongside you. "You" makes it a
+lecture.
+
+### Rhetorical questions are fine as pivots
+
+Banned as *filler* ("Have you ever wondered?"). Encouraged as the moment the
+idea turns over:
+
+> So instead of going from enemy to player, **why don't we** start at the player
+> and flood outwards?
+
+### Smaller habits worth copying
+
+- **"just" as a minimiser** — *we just give them*, *they can all just use this*,
+  *we just have the one calculation*, *just answer it once*. It makes the fix
+  sound obvious, which is the feeling you want at a payoff.
+- **"can even" to escalate** — *we can even go ahead and lie to the grid*.
+- **Drop the subject** — *"Doesn't matter if we have a thousand enemies"*, not
+  *"It doesn't matter whether..."*.
+- **Vague quantities spoken, exact ones on screen** — say *a couple hundred*,
+  let the `Readout` say `200`.
+- **Vivid informal verbs** — *lie to the grid*, *flood outwards*, *bunching up*.
+- **A short flat payoff to close** — *"That's the trick. Don't ask the same
+  question 200 times, just answer it once."*
+- **Slightly loose grammar is authentic** — *"to avoid them from bunching up"*
+  is not standard and is exactly right. Do not tidy speech into correctness.
+
+### Still don't
+
+- "Have you ever wondered...", "Let's dive in", "But here's the crazy part".
 - "In this video I'm going to show you" — just show it.
-- Rhetorical questions used as filler.
 - Hype adjectives: *insane, mind-blowing, game-changing, powerful*.
 - Sign-offs, "smash that follow", or any call to action.
+- Presenter throat-clearing: *"Let's take a look at"*, *"As you can see"*.
+
+### The test
+
+Read the line out loud. If you would not say it that way to a mate who
+happens to be a programmer, rewrite it. Stiffness almost always shows up as
+either a missing connective at the start, or a full stop where a comma
+belonged.
 
 ## Timing
 

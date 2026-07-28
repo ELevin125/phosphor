@@ -19,14 +19,31 @@ fi
 ENTRY="src/index.ts"
 BUNDLE_DIR="$ROOT/out/.bundle"
 
-# Bundles the project once so repeated stills don't re-bundle every time.
-# Rebuilds whenever any source file is newer than the bundle.
-ensure_bundle() {
-  local newest
-  newest="$(find src remotion.config.ts package.json -type f -newer "$BUNDLE_DIR/index.html" 2>/dev/null | head -1 || true)"
+# Everything the bundle is built from. Miss one and the QA loop silently
+# inspects an old build — which is worse than no caching at all, because a
+# contact sheet that lies is indistinguishable from a change that did nothing.
+#
+# `projects` is here because video code lives there, not under src. `public`
+# because Remotion copies it into the bundle, so re-encoding a clip changes the
+# output even though no code moved.
+BUNDLE_INPUTS=(src projects public remotion.config.ts package.json)
 
-  if [ ! -f "$BUNDLE_DIR/index.html" ] || [ -n "$newest" ]; then
-    echo "› bundling..." >&2
+# Bundles the project once so repeated stills don't re-bundle every time.
+# Rebuilds whenever any input is newer than the bundle.
+ensure_bundle() {
+  local stamp="$BUNDLE_DIR/index.html"
+  local newest=""
+
+  if [ -f "$stamp" ]; then
+    local existing=()
+    for p in "${BUNDLE_INPUTS[@]}"; do
+      [ -e "$p" ] && existing+=("$p")
+    done
+    newest="$(find "${existing[@]}" -type f -newer "$stamp" -print -quit 2>/dev/null || true)"
+  fi
+
+  if [ ! -f "$stamp" ] || [ -n "$newest" ]; then
+    echo "› bundling${newest:+ (${newest} changed)}..." >&2
     rm -rf "$BUNDLE_DIR"
     npx remotion bundle "$ENTRY" --out-dir="$BUNDLE_DIR" --log=error >/dev/null
   fi

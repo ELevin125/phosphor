@@ -9,6 +9,45 @@ tokens from the theme, then use it.
 
 ---
 
+## Which primitive for which claim
+
+**Read this at Phase 0.5, before deciding how a beat looks.** Work from the
+*shape of the claim*, not from the topic. Two videos about completely different
+subjects usually want the same picture.
+
+| The claim is about… | Reach for | Examples |
+|---|---|---|
+| a place, and things moving in it | `Scene` + `Dot`/`Trail`/`Vec` | steering, spawn patterns, aggro radius |
+| a grid-based algorithm | `Field` | flow fields, A* frontiers, influence maps, fog of war |
+| **how often** something happens | `Lanes` (or `Ruler` for one rate) | update frequency, hitstop gating, cost per second |
+| **two clocks at once** | `Lanes` + `playhead` | `Update` vs `FixedUpdate`, coroutines, jobs vs main thread |
+| **who depends on whom** | `Graph` / `Fanout` | events vs direct calls, DI, assembly refs, singletons |
+| **structure or states** | `Graph` (`ring` / `rows`) | FSMs, behaviour trees, scene hierarchy, dependency layers |
+| **adjacency in memory** | `Strip` | pools, arrays, stacks, ring buffers, AoS vs SoA, cache lines |
+| a **curve** or a **trade-off** | `Plot` | easing, damage falloff, difficulty ramp, cost vs staleness |
+| **two things behaving differently** | `Versus` | with/without hitstop, `Lerp` vs `SmoothDamp`, two sims |
+| genuinely **3D** space | `Scene3D` + `Wire*` | transforms, gimbal lock, frustums, colliders, XZ-plane |
+| the **shape of an API** | `CodeReveal` / `CodeDiff` | signatures, a rewrite, a branch appearing |
+| one line worth remembering | `Statement` | the payoff beat |
+| the real thing | `Clip bleed` / `Peel` | hooks, outros, before/after footage |
+
+Three rules that come out of using these:
+
+- **A claim about frequency cannot be made on a spatial diagram.** A grid can
+  only pulse and hope you count. If the sentence contains "per second" or "every
+  frame", it needs `Lanes`.
+- **A claim about dependency direction is invisible in code.**
+  `_camera.ShakeAt(...)` and `Died += ...` are both one line. Draw it.
+- **`Strip` is not `Field`.** A `Field` cell is a *place* an agent can stand; a
+  `Strip` cell is an *index*, and the gap between two is a stride. Drawing a
+  heap as a room is a category error the viewer will feel without naming.
+
+**Reserve `Scene3D` for claims that are genuinely spatial.** A 3D picture of a
+2D idea is worse than the 2D one. It also has no occlusion — everything draws,
+with distant edges faded — so it cannot express "the wall hides the enemy".
+
+---
+
 ## Structure of a video file
 
 ```tsx
@@ -108,18 +147,50 @@ Generic themed panel plus layout helpers.
 ### `<Clip>` / `<Compare>`
 Gameplay footage.
 ```
-Clip:    src (path in public/)  label?  startAt?  objectPosition?  aspect?  tone?
+Clip:    src (path in public/)  label?  startAt?  startSeconds?  bleed?
+         objectPosition?  aspect?  tone?
 Compare: top: ClipProps   bottom: ClipProps   gap?
 ```
 - Uses `OffthreadVideo`, so **the contact sheet still works on video beats** —
   it pulls exact frames via ffmpeg. Never swap this for `Html5Video`.
 - Audio is always muted; game audio under narration is never wanted.
-- `startAt` offsets into the source so successive beats show different moments
-  instead of replaying the opening every time.
-- `aspect` locks the panel ratio. **Use it for a clip shown alone** — letting a
-  16:9 source fill a tall panel crops it to a ribbon. A square (`aspect={1}`)
-  fills a vertical frame far better than 4:3.
+- **`bleed` is what a footage-led beat wants.** Fills the content box, no panel,
+  no border, no corner decor, and ignores `aspect`. A hook shot is not a figure
+  presented on a surface — it is the picture.
+- `startSeconds` over `startAt`: the latter is frames, and every video that used
+  it wrote `13.5 * 30` with a comment explaining the 30.
+- **`aspect` only when the clip shares the frame with something else.** Setting
+  it on a lone clip is what caused the re-crop bug — two beats with different
+  ratios letterbox the same footage into different-shaped boxes, and a shot that
+  changes shape mid-cut reads as a rendering fault.
 - `objectPosition` biases the crop when the action sits off-centre.
+
+### `<Lanes>` / `<Ruler>`
+Parallel time tracks. **Not** in `scene/` — a scene is a place, this is a clock.
+```
+Lanes: lanes: Lane[]  playhead?  trackHeight?  gap?  panel?  dim?
+Lane:  label?  readout?  ticks?  spans?  lag?  dim?
+Ruler: one lane, same props flattened
+```
+- `ticks` are instants (`tone: 'live' | 'idle'` — waste becomes a colour rather
+  than a claim); `spans` are work occupying time; `lag` is a bracket, because
+  staleness is a duration and a duration on a time axis is a length.
+- `playhead` crosses **every** lane, which is the whole reason to have more than
+  one: "the coroutine resumes on the frame after the one that yielded" is a
+  claim about two lanes at one instant.
+- `panel` whenever lanes share the frame with a diagram — mono labels over a lit
+  grid are unreadable.
+
+### `<Versus>`
+Two halves of the frame running the same thing two ways.
+```
+top  bottom  topLabel?  bottomLabel?  gap?  reveal?  dimTop?  dimBottom?
+```
+Stacked, not columns — two columns give each version a 432px strip. Unlike
+`Compare` it takes **arbitrary children**, so the comparison can be live: run
+both sims and let them diverge, because a hand-animated divergence is an
+assertion with extra steps. Each half publishes its height on `SceneHeight`, so
+a `Scene` inside it sizes to the pane rather than the content box.
 
 Footage must be pre-processed: editor chrome cropped off, converted to the
 composition fps, audio stripped. See `references/style.md`.
@@ -245,6 +316,44 @@ tints 98% of the floor and the frame just changes colour. Measure the coverage
 before picking the number — at padding 1 it tinted 46% *and* re-routed more of
 the field.
 
+## `<Graph nodes edges layout direction pulse>` / `<Fanout>`
+
+Nodes and directed edges — the primitive for **structure and dependency
+direction**.
+
+- `layout`: `{kind:'free'}` (every node carries `at`), `{kind:'ring', rx?, ry?}`
+  (state machines, cycles — starts at the top, goes clockwise), or
+  `{kind:'rows', rows: string[][]}` (hierarchies, dependency levels).
+- `direction` runs `+1` (arrows point at `to`) through `-1` (point back at
+  `from`), and **animating between them is an argument by itself**: the same
+  dependencies pointing the other way is the difference between a direct call
+  and an event. Heads slide *and* rotate, so it reads as arrows turning around
+  rather than as a cut between two diagrams.
+- `active` on a node draws it filled — the live state of a machine. Weight, not
+  hue: a recoloured outline disappears once the diagram gets busy.
+- `edges[].label` for transition conditions. Self-edges are skipped.
+- `Fanout` is the star case: a hub plus its listeners, in explicit positions.
+  Use it rather than a node list where every edge repeats the same `from`.
+
+## `<Strip cells at cellWidth pointers label indexEvery>`
+
+A 1-D run of cells with pointers into it — **contiguous memory**. See the
+`Strip` vs `Field` rule above; they are not interchangeable.
+
+`pointers` sit above by default, `below: true` underneath. Everything under the
+strip (indices, caption) auto-clears the below-pointers.
+
+## `<Plot xRange yRange curves points marker>`
+
+Two axes, in **data space** — a curve is authored in seconds or damage or cells
+and the plot maps it into the box, so resizing never means rescaling by hand.
+
+- `curves` for anything tuned over a range; `reveal` draws one on progressively.
+- `points` for a **trade-off space**, and this is the underused half. Three
+  options plotted against cost and staleness say "pick one" in a way three
+  numbers in a table never do. Labels flip inside near the right edge, because
+  the most interesting option is usually the extreme one.
+
 ## Annotations
 
 | component | what it is |
@@ -282,3 +391,71 @@ Two things it handles that are easy to get wrong by hand:
   wide soft shadow, and a scrim hugging the seam. A single shadow either haloes
   or sinks, never both, and a hot yellow badge over sunlit yellow terrain needs
   both. Both clips play from t=0 throughout: the reveal is a mask, never a delay.
+
+---
+
+# Wireframe 3D (`src/kit/scene3`)
+
+The scene system with a camera instead of a fit. Same contract: author in world
+units, map to pixels once.
+
+```tsx
+<Scene3D camera={{ pos: [8, 6, -8], target: [0, 0, 0], fov: 38, fit: 8.6 }}>
+  <WireTerrain size={12} cells={12} height={(x, z) => Math.sin(x) * 0.7} />
+  <WireBox at={[-4, 0.9, 4]} size={1.6} tone="accent" />
+  <WireSphere at={[4, 1.1, -4]} r={1.1} tone="accentAlt" />
+  <Tag3 at={[4, 2.5, -4]}>collider</Tag3>
+</Scene3D>
+```
+
+Right-handed, **y up** — Unity's convention, so a diagram is never a mirror of
+the engine it describes.
+
+## `fit` is the important prop
+
+With `fit`, `pos` supplies only the viewing **direction** and the distance is
+solved so a sphere of that radius around `target` stays in frame. Without it
+every 3D beat starts by guessing a camera distance and re-rendering until the
+geometry stops falling off the edge — exactly the hand-tuning the layout law
+exists to abolish. On a 1080x1920 frame the *horizontal* extent is the binding
+constraint, which is not the intuitive one.
+
+## Primitives
+
+`WireGrid` (flat XZ lattice) · `WireBox` · `WireSphere` · `WireTerrain`
+(heightfield from a sampler) · `WireFrustum` (view volume — culling, near/far)
+· `WireMesh` (any `{points, edges}`) · `Tag3` · `Dot3`.
+
+`depthFade` does the job depth cueing does in a shaded render. Without it a
+wireframe is genuinely ambiguous — the Necker cube, where the eye cannot tell
+which face is nearer and flips between readings while you watch. **Orbiting the
+camera slowly resolves it far better than any static shot.**
+
+## Why not Three.js
+
+Wireframes are lines, and lines take stroke width and colour from the theme like
+everything else. A WebGL render takes its look from materials and lights
+instead, so a 3D beat would arrive looking like it came from a different video.
+It would also need a GL backend in the headless renderer: slower, and one driver
+update from breaking.
+
+**Limitation to state plainly: there is no occlusion.** Everything draws, with
+distant edges faded. For a wireframe that is arguably correct — seeing the back
+of the box is how you read its shape — but it cannot express "the wall hides the
+enemy". That claim needs footage.
+
+---
+
+# Verifying the kit
+
+`projects/kit-check/` is a visual smoke test, not a video: one beat per
+primitive, captions off, no voiceover.
+
+```bash
+./scripts/contact-sheet.sh kit-check-gizmo --count 16 --cols 4
+```
+
+**Add a beat whenever a new primitive lands.** Typechecking proves the props
+line up and says nothing about whether the picture is right — every defect found
+while building `Lanes`/`Graph`/`Strip`/`Plot`/`Scene3D` (labels colliding,
+geometry off the frame, text running off the right edge) compiled perfectly.

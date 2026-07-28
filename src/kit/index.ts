@@ -16,9 +16,22 @@ export { Callout, type CalloutProps, type CalloutTone } from './Callout';
 export { Arrow, type ArrowProps, type ArrowDirection } from './Arrow';
 export { Box, Row, Stack, type BoxProps, type BoxTone } from './Box';
 export { Clip, Compare, Peel, type ClipProps, type CompareProps, type PeelProps } from './Clip';
+export {
+  Lanes,
+  Ruler,
+  type LanesProps,
+  type Lane,
+  type LaneTick,
+  type LaneSpan,
+  type RulerProps,
+  type RulerTick,
+} from './Lanes';
+export { Split, type SplitProps } from './Split';
 export { Music, pickEntry, type MusicSpec } from './Music';
 
+export { Versus, type VersusProps } from './Versus';
 export * from './scene';
+export * from './scene3';
 
 export { useTheme } from './ThemeContext';
 export {

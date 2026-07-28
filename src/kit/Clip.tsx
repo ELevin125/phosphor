@@ -1,5 +1,11 @@
 import React from 'react';
-import { interpolate, OffthreadVideo, staticFile, useCurrentFrame } from 'remotion';
+import {
+  interpolate,
+  OffthreadVideo,
+  staticFile,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 import { useGestureStyle } from './motion';
 import { PanelDecor } from './PanelDecor';
 import { useSurfaceStyle } from './surface';
@@ -11,10 +17,12 @@ export type ClipProps = {
   /** Small chip overlaid on the clip, e.g. "YOU". */
   readonly label?: string;
   /**
-   * Frames into the source clip to start at. Lets successive beats show
-   * different moments instead of replaying the same opening every time.
+   * FRAMES into the source to start at. Prefer `startSeconds` — every video
+   * that has used this wrote `13.5 * 30` with a comment explaining the 30.
    */
   readonly startAt?: number;
+  /** Seconds into the source to start at. Converted using the composition fps. */
+  readonly startSeconds?: number;
   /**
    * Which part of the frame to keep when the clip is cropped to the panel.
    * `'35% 50%'` biases left — useful when the action sits off-centre.
@@ -24,16 +32,36 @@ export type ClipProps = {
   /** Fill the space a Compare/Stack gives it. */
   readonly grow?: boolean;
   /**
-   * Lock the panel to a width/height ratio, e.g. `4 / 3`. Use for a clip shown
-   * on its own: letting a 16:9 source fill a tall panel crops it to ribbons.
+   * Lock the panel to a width/height ratio, e.g. `4 / 3`.
+   *
+   * **Only for a clip sharing the frame with something else.** Setting it on a
+   * clip shown alone is what produced the re-crop bug: two consecutive beats
+   * with different ratios letterbox the same footage into different-shaped
+   * boxes, and a shot that changes shape mid-cut reads as a rendering fault.
+   * A lone clip wants `bleed`.
    */
   readonly aspect?: number;
+  /**
+   * Fill the content box edge to edge, with no panel, border or corner decor.
+   *
+   * This is the mode footage-led beats actually want, and its absence is why
+   * both footage videos bypassed this component for a raw `OffthreadVideo`.
+   * A hook shot is not a figure being presented on a surface — it is the
+   * picture, and panel chrome around it just makes the frame smaller.
+   */
+  readonly bleed?: boolean;
   /** Tint colour for the label chip. Defaults to the theme accent. */
   readonly tone?: 'accent' | 'accentAlt';
 };
 
+/** Start offset in frames, from whichever unit the caller supplied. */
+const trimOf = (
+  c: { readonly startAt?: number; readonly startSeconds?: number },
+  fps: number,
+): number => c.startAt ?? (c.startSeconds !== undefined ? Math.round(c.startSeconds * fps) : 0);
+
 /**
- * A gameplay clip in a themed frame.
+ * A gameplay clip, either full-bleed or in a themed frame.
  *
  * Uses `OffthreadVideo` rather than `Html5Video`: it extracts exact frames via
  * ffmpeg, which is both deterministic under render and the reason the
@@ -45,36 +73,44 @@ export type ClipProps = {
 export const Clip: React.FC<ClipProps> = ({
   src,
   label,
-  startAt = 0,
+  startAt,
+  startSeconds,
   objectPosition = 'center',
   delay = 0,
   grow = true,
   aspect,
+  bleed = false,
   tone = 'accent',
 }) => {
   const theme = useTheme();
+  const { fps } = useVideoConfig();
   const enter = useGestureStyle('media', { delay, seed: label ?? 'clip' });
   const surface = useSurfaceStyle();
   const chipColor = tone === 'accentAlt' ? theme.colors.accentAlt : theme.colors.accent;
 
+  const trim = trimOf({ startAt, startSeconds }, fps);
+
   return (
     <div
       style={{
-        ...enter,
-        ...surface,
+        ...(bleed ? {} : enter),
+        ...(bleed ? {} : surface),
         position: 'relative',
         overflow: 'hidden',
-        flexGrow: aspect ? 0 : grow ? 1 : 0,
-        flexBasis: aspect ? 'auto' : grow ? 0 : 'auto',
-        aspectRatio: aspect ? `${aspect}` : undefined,
+        // Bleed ignores `aspect` and `grow` entirely: it is defined as "fill the
+        // box you were given", and honouring a ratio would reintroduce exactly
+        // the letterboxing it exists to avoid.
+        flexGrow: bleed ? 1 : aspect ? 0 : grow ? 1 : 0,
+        flexBasis: bleed ? 0 : aspect ? 'auto' : grow ? 0 : 'auto',
+        aspectRatio: !bleed && aspect ? `${aspect}` : undefined,
         minHeight: 0,
         width: '100%',
       }}
     >
-      <PanelDecor seed={label ?? src} />
+      {bleed ? null : <PanelDecor seed={label ?? src} />}
       <OffthreadVideo
         src={staticFile(src)}
-        trimBefore={startAt}
+        trimBefore={trim}
         volume={0}
         style={{
           width: '100%',
@@ -178,6 +214,7 @@ export const Peel: React.FC<PeelProps> = ({
 }) => {
   const theme = useTheme();
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
   // Linear, not a spring: this is a mask edge travelling, and an overshooting
   // wipe would expose the band below the frame before snapping back.
@@ -238,7 +275,7 @@ export const Peel: React.FC<PeelProps> = ({
       <div style={band}>
         <OffthreadVideo
           src={staticFile(top.src)}
-          trimBefore={top.startAt ?? 0}
+          trimBefore={trimOf(top, fps)}
           volume={0}
           style={{ ...video, objectPosition: top.objectPosition ?? 'center' }}
         />
@@ -253,7 +290,7 @@ export const Peel: React.FC<PeelProps> = ({
       <div style={{ ...band, clipPath: `inset(0 0 ${(1 - reveal) * 100}% 0)` }}>
         <OffthreadVideo
           src={staticFile(bottom.src)}
-          trimBefore={bottom.startAt ?? 0}
+          trimBefore={trimOf(bottom, fps)}
           volume={0}
           style={{ ...video, objectPosition: bottom.objectPosition ?? 'center' }}
         />

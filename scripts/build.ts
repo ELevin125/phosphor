@@ -60,13 +60,39 @@ const statePath = join(projectDir, '.build-state.json');
 /** mtime in ms, or 0 when the file does not exist — a missing output is stale. */
 const mtime = (p: string): number => (existsSync(p) ? statSync(p).mtimeMs : 0);
 
+const sha = (v: unknown): string =>
+  createHash('sha1').update(JSON.stringify(v ?? null)).digest('hex').slice(0, 12);
+
+type Doc = {
+  vo?: unknown;
+  corrections?: unknown;
+  beats?: readonly { id?: string; vo?: string }[];
+};
+const doc = (): Doc => (parse(readFileSync(beatsYaml, 'utf8')) as Doc | null) ?? {};
+
 /** Hash of just the `vo:` block, so retime's duration rewrites do not count. */
-const voHash = (): string => {
-  const doc = parse(readFileSync(beatsYaml, 'utf8')) as { vo?: unknown } | null;
-  return createHash('sha1').update(JSON.stringify(doc?.vo ?? null)).digest('hex').slice(0, 12);
+const voHash = (): string => sha(doc().vo);
+
+/**
+ * Hash of retime's *alignment key* — every beat's id and narration, plus the
+ * corrections map.
+ *
+ * mtime cannot stand in for this. beats.yaml is rewritten by retime itself, so
+ * it is always newer than captions.json and comparing the two would either
+ * re-transcribe forever or (as it did) never re-transcribe at all. Durations
+ * are excluded for the same reason: retime writes them.
+ *
+ * This matters because rewriting a `vo` line is the documented fix when the
+ * read drifted from the script, and skipping retime after it is the exact
+ * silent failure this script exists to prevent — captions and beat boundaries
+ * that describe a script nobody read aloud.
+ */
+const scriptHash = (): string => {
+  const d = doc();
+  return sha([(d.beats ?? []).map((b) => [b.id ?? '', b.vo ?? '']), d.corrections]);
 };
 
-type State = { voSettings?: string };
+type State = { voSettings?: string; voScript?: string };
 const state: State = existsSync(statePath)
   ? (JSON.parse(readFileSync(statePath, 'utf8')) as State)
   : {};
@@ -116,12 +142,20 @@ if (!hasVo) {
 
 // -------------------------------------------------------------------- retime
 
+const scriptNow = scriptHash();
+
 if (!existsSync(wav)) {
   skip('retime', 'no vo.wav to transcribe');
-} else if (FORCE || mtime(captions) < mtime(wav)) {
-  run('retime', 'retime.ts', [slug]);
 } else {
-  skip('retime', 'captions are up to date');
+  const scriptChanged = state.voScript !== undefined && state.voScript !== scriptNow;
+  if (FORCE || mtime(captions) < mtime(wav) || scriptChanged) {
+    if (scriptChanged) {
+      console.log('  (narration changed)');
+    }
+    run('retime', 'retime.ts', [slug]);
+  } else {
+    skip('retime', 'captions are up to date');
+  }
 }
 
 // --------------------------------------------------------------- build-beats
@@ -140,7 +174,13 @@ if (FORCE || mtime(generated) < mtime(beatsYaml)) {
 run('sync', 'sync-projects.ts', []);
 
 if (!DRY) {
-  writeFileSync(statePath, JSON.stringify({ voSettings: settingsNow }, null, 2));
+  // Re-hashed rather than reusing `scriptNow`: retime rewrites beats.yaml, and
+  // storing the pre-run hash would make the next build think the narration had
+  // changed again.
+  writeFileSync(
+    statePath,
+    JSON.stringify({ voSettings: settingsNow, voScript: scriptHash() }, null, 2),
+  );
 }
 
 console.log(`\n✓ ${slug} is built.`);

@@ -90,19 +90,6 @@ const main = async () => {
     rewriting across token boundaries would mean inventing timings.
   */
   const corrections = plain.corrections ?? {};
-  const fixes = new Map(
-    Object.entries(corrections).map(([wrong, right]) => [wrong.toLowerCase(), right]),
-  );
-  let fixCount = 0;
-  for (const caption of captions) {
-    const key = caption.text.trim().toLowerCase().replace(/[^a-z0-9']/g, '');
-    const fix = fixes.get(key);
-    if (fix !== undefined) {
-      // Keep whisper's leading space; it is what joins words back into a line.
-      caption.text = caption.text.replace(/[A-Za-z0-9']+/, fix);
-      fixCount++;
-    }
-  }
 
   /*
     Re-join contractions into whole words BEFORE the captions are written.
@@ -127,8 +114,19 @@ const main = async () => {
     // "1,000" arrives as "1" + "," + "000"; without this it reads "1 , 000".
     const thousands =
       prev !== undefined && /[,.]$/.test(prev.text.trim()) && /^\d+$/.test(text);
+    /*
+      A sub-word continuation. whisper marks a new word with a LEADING SPACE, so
+      a token that starts with a letter and has no leading space is the tail of
+      the previous word: "flood" arrives as " Flood" + "ful". Without this the
+      grouper treats them as two words and the caption reads "Flood ful".
 
-    if (prev && (contraction || punctuation || thousands)) {
+      This is the general case of the contraction rule above, which is the same
+      bug for tokens beginning with an apostrophe.
+    */
+    const continuation =
+      prev !== undefined && !/^\s/.test(caption.text) && /^[\p{L}\p{N}]/u.test(text);
+
+    if (prev && (contraction || punctuation || thousands || continuation)) {
       prev.text += text;
       prev.endMs = caption.endMs;
       continue;
@@ -136,6 +134,61 @@ const main = async () => {
     merged.push({ ...caption });
   }
   const joined = captions.length - merged.length;   // contractions, stray punctuation, thousands
+
+  /*
+    Fix words whisper reliably gets wrong, before they reach the screen.
+
+    These captions are burned in, so a mis-transcription is a visible typo in
+    the finished video — "they all cause the same" instead of "cost". Editing
+    captions.json by hand does not survive the next retime, so the corrections
+    live in beats.yaml and are re-applied every run.
+
+    Applied AFTER merging, because the thing needing correction is often a whole
+    word that only exists once its sub-word tokens have been joined ("Floodful"
+    is " Flood" + "ful").
+
+    A key may be several words, which is what makes an ambiguous word fixable:
+    "for" cannot be corrected globally, but "flood for" -> "flood fill" can.
+    Word counts must match, so each merged word keeps its own timing and no
+    timestamp is ever invented. Case-insensitive, punctuation-insensitive.
+  */
+  const key = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9']/g, '');
+  let fixCount = 0;
+
+  for (const [wrong, right] of Object.entries(corrections)) {
+    const from = wrong.trim().split(/\s+/);
+    const to = right.trim().split(/\s+/);
+    if (from.length !== to.length) {
+      throw new Error(
+        `correction "${wrong}" -> "${right}" changes word count ` +
+          `(${from.length} to ${to.length}). Each word carries its own timing, ` +
+          `so a replacement must have the same number of words.`,
+      );
+    }
+    const want = from.map(key);
+
+    for (let i = 0; i + want.length <= merged.length; i++) {
+      const hit = want.every((w, k) => key(merged[i + k]!.text) === w);
+      if (!hit) {
+        continue;
+      }
+      for (let k = 0; k < want.length; k++) {
+        const cap = merged[i + k]!;
+        /*
+          The replacement is the WHOLE word, not just its letters, so stray
+          punctuation whisper attached can be removed: "and be? Floodful" needs
+          to become "and we flood", not "and we? flood". Write the punctuation
+          into the correction if you want to keep it.
+
+          The leading space is preserved separately — it is what joins words
+          back into a line.
+        */
+        const lead = /^\s*/.exec(cap.text)?.[0] ?? '';
+        cap.text = lead + to[k]!;
+      }
+      fixCount += want.length;
+    }
+  }
 
   writeFileSync(join(videoDir, 'captions.json'), JSON.stringify(merged, null, 2));
   console.log(

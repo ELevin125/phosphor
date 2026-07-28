@@ -109,12 +109,26 @@ Practical rules for scenes:
    showcase.)* Not just the definition — find the common misconceptions, the wrong mental model people actually hold, and where the
    confusion persists. Search if the topic is unfamiliar. This research is what
    makes the video worth making.
-2. Write `projects/<slug>/script.md` in the format in
+2. **Pick the slug and run `npm run new <slug>` before writing anything.** This
+   creates `projects/<slug>/` and `public/videos/<slug>/`. The second one is the
+   point: the user needs somewhere to paste the recording and any footage the
+   moment the script is approved, and making them mkdir it by hand is friction
+   at exactly the wrong moment. Do this even if the script may still change —
+   an empty folder costs nothing.
+3. Write `projects/<slug>/script.md` in the format in
    `references/script-format.md`: hook, the confusion section, beats table,
    clean narration block, delivery notes.
-3. Narration is written **to be read aloud in the user's voice**: plain, direct,
-   no presenter filler. See the do/don't list in `references/script-format.md`.
-4. Total runtime **35-50 seconds**, estimated at ~2.6 words/sec. Silent
+4. Narration is written **to be read aloud in the user's voice** — one gamedev
+   talking to another, mid-thought. **Read the narration section of
+   `references/script-format.md` before writing a single line.** It is worked
+   from real recorded delivery, and the default failure is writing prose that is
+   correct, tidy, and sounds like bullet points being recited. Beats open on
+   connectives ("So", "Now", "The thing is"), sentences run long with commas,
+   and it is always "we", never "you".
+5. **Count the words and divide by 2.6 to get each beat's duration.** Do not set
+   durations by feel — it is wrong every time, and being wrong by 2× is normal.
+   Put the word count in the beats table so the arithmetic stays visible.
+6. Total runtime **35-50 seconds**, estimated at ~2.6 words/sec. Silent
    explainers target 18-40s; showcases have no target.
 
 For a **showcase**, `script.md` is just: a layout sketch, the exact on-screen
