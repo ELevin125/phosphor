@@ -193,6 +193,11 @@ which tightens every boundary. Words whisper reliably mishears go in a
 `corrections:` map in `beats.yaml`, because burned-in captions show the error
 and hand-editing `captions.json` does not survive the next run.
 
+`retime` also stamps the script's punctuation onto the transcript, so the
+caption grouper can break on sentences instead of counting words. **Run
+`npm run captions` after every retime** — it scores phrasing in milliseconds and
+catches breaks a 30-frame contact sheet never samples. See `references/style.md`.
+
 ### Music
 
 Drop tracks in `public/music/<genre>/`, add a row to `public/music/music.yaml`
@@ -224,6 +229,8 @@ Check every sheet for:
 - [ ] **Safe areas** — nothing in the top 12%, bottom 20%, or right rail.
       Verify with `--debug` after any layout change.
 - [ ] **Caption band** — captions inside it, nothing else inside it, never over code.
+      Phrasing is checked separately by `npm run captions`, not by eye — a sheet
+      samples too few frames to catch a bad break.
 - [ ] **Static holds** — if two consecutive samples are identical and more than
       ~3s apart, the beat is dead. Stagger the reveals across the beat.
 - [ ] **Mid-transition end states** — confirm a `CodeDiff` actually resolves to

@@ -190,21 +190,24 @@ const main = async () => {
     }
   }
 
-  writeFileSync(join(videoDir, 'captions.json'), JSON.stringify(merged, null, 2));
-  console.log(
-    `✓ captions.json (${merged.length} words` +
-      `${fixCount > 0 ? `, ${fixCount} corrected` : ''}` +
-      `${joined > 0 ? `, ${joined} tokens rejoined` : ''})`,
-  );
+  // captions.json is written after the alignment below, which stamps the
+  // script's punctuation onto the transcript.
 
   // --- re-time the beats -------------------------------------------------
 
   // Whisper emits punctuation attached to words; compare on letters only.
   const norm = (w: string): string => w.toLowerCase().replace(/[^a-z0-9]/g, '');
-  // Already whole words — contractions were rejoined before writing.
-  const spoken = merged
-    .filter((c) => c.text.trim() !== '')
-    .map((c) => ({ text: c.text.trim(), endMs: c.endMs }));
+  // Already whole words — contractions were rejoined before writing. The index
+  // map is what lets the alignment write back into `merged`.
+  const spokenIndex: number[] = [];
+  const spoken: { readonly text: string; readonly endMs: number }[] = [];
+  merged.forEach((c, i) => {
+    if (c.text.trim() === '') {
+      return;
+    }
+    spokenIndex.push(i);
+    spoken.push({ text: c.text.trim(), endMs: c.endMs });
+  });
 
   /*
     Align the script against the transcript, rather than counting words off it.
@@ -220,13 +223,22 @@ const main = async () => {
     and a deviation in one beat is absorbed locally instead of shifting
     everything after it. Roughly 200x200 cells here — free.
   */
-  type ScriptToken = { readonly word: string; readonly beat: number };
+  type ScriptToken = {
+    readonly word: string;
+    readonly beat: number;
+    /** Trailing punctuation on the scripted word, e.g. "." on "the run." */
+    readonly punct: string;
+  };
   const script: ScriptToken[] = [];
   plain.beats.forEach((beat, i) => {
     for (const token of beat.vo.trim().split(/\s+/)) {
       const word = norm(token);
       if (word) {
-        script.push({ word, beat: i });
+        script.push({
+          word,
+          beat: i,
+          punct: /([.,;:!?]+)["')\]]?$/.exec(token)?.[1] ?? '',
+        });
       }
     }
   });
@@ -271,21 +283,37 @@ const main = async () => {
     }
   }
 
-  // Walk back: the last transcript word each beat owns is that beat's boundary.
+  /*
+    Walk back: the last transcript word each beat owns is that beat's boundary.
+
+    The same pass carries the script's PUNCTUATION onto the transcript, which is
+    what lets the caption grouper break on sentences instead of counting words.
+    whisper punctuates unreliably — `every-frame` was transcribed with 4
+    sentence ends where the script has 17 — so without this the grouper has
+    almost no structure to work with and falls back on length alone.
+
+    This punctuation is BURNED INTO THE CAPTION TEXT, not just used as a hint,
+    so a mark in the wrong place is a visible typo rather than a bad line break.
+    That makes the guard below the important part of this pass.
+  */
   const lastHeard = new Array<number>(plain.beats.length).fill(-1);
   let matched = 0;
+  /** Exact script/transcript matches, collected in reverse by the walk. */
+  const pairs: { readonly s: number; readonly h: number }[] = [];
   {
     let i = n;
     let j = m;
     while (i > 0 || j > 0) {
       const dir = i === 0 ? 2 : j === 0 ? 1 : tb[i * W + j]!;
       if (dir === 0) {
-        const b = script[i - 1]!.beat;
+        const token = script[i - 1]!;
+        const b = token.beat;
         if (lastHeard[b]! < j - 1) {
           lastHeard[b] = j - 1;
         }
-        if (script[i - 1]!.word === heard[j - 1]) {
+        if (token.word === heard[j - 1]) {
           matched++;
+          pairs.push({ s: i - 1, h: j - 1 });
         }
         i--;
         j--;
@@ -296,6 +324,48 @@ const main = async () => {
       }
     }
   }
+  pairs.reverse();
+
+  /*
+    Stamp the script's punctuation, but only where the alignment is clean ACROSS
+    the mark — the next scripted word must also be the next spoken word.
+
+    A matching word on its own is not enough. The script reads "a full flood
+    fill." and the take carried straight on into "flood fill calculation
+    happening every frame"; "fill" matches, so a naive transfer closes a
+    sentence in the middle of one, and the caption ships reading "full flood
+    fill. calculation". Requiring the following pair to be adjacent too means a
+    take that diverged after this word simply gets no mark, which is the right
+    way to be wrong: a missed break costs a slightly worse line, an invented
+    full stop costs a typo in a burned-in caption.
+  */
+  let punctuated = 0;
+  for (let k = 0; k < pairs.length; k++) {
+    const { s, h } = pairs[k]!;
+    const { punct } = script[s]!;
+    if (!punct) {
+      continue;
+    }
+    const next = pairs[k + 1];
+    const clean = s === n - 1 || (next !== undefined && next.s === s + 1 && next.h === h + 1);
+    if (!clean) {
+      continue;
+    }
+    const cap = merged[spokenIndex[h]!]!;
+    if (/[.,;:!?]["')\]]?\s*$/.test(cap.text)) {
+      continue;
+    }
+    cap.text = cap.text.replace(/\s+$/, '') + punct;
+    punctuated++;
+  }
+
+  writeFileSync(join(videoDir, 'captions.json'), JSON.stringify(merged, null, 2));
+  console.log(
+    `✓ captions.json (${merged.length} words` +
+      `${fixCount > 0 ? `, ${fixCount} corrected` : ''}` +
+      `${joined > 0 ? `, ${joined} tokens rejoined` : ''}` +
+      `${punctuated > 0 ? `, ${punctuated} punctuated from the script` : ''})`,
+  );
 
   const fidelity = n > 0 ? (matched / n) * 100 : 0;
   console.log(`› alignment: ${matched}/${n} script words matched (${fidelity.toFixed(0)}%)`);

@@ -18,7 +18,8 @@
     "analyse-music": "tsx scripts/analyse-music.ts",
     "process-vo": "tsx scripts/process-vo.ts",
     "typecheck": "tsc --noEmit",
-    "pretypecheck": "npm run sync"
+    "pretypecheck": "npm run sync",
+    "captions": "tsx scripts/captions.ts"
   },
   "dependencies": {
     "@remotion/captions": "4.0.499",

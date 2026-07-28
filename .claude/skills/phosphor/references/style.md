@@ -190,15 +190,44 @@ exactly on a beat boundary. Sample densely enough to land on boundaries.
 
 ## Captions
 
-- **Phrase blocks of 3-5 words, held for their full duration.** Never
+- **Phrase blocks of about four words, held for their full duration.** Never
   word-by-word karaoke: next to syntax-highlighted code, a word popping every
   200ms is visual noise competing with the thing the viewer is meant to read.
 - Captions live in the reserved band and **never** over code.
-- Phrases break on punctuation where possible and avoid ending on a clingy word
-  (`a`, `the`, `of`, `to`, `is`...).
 - Before the VO exists, captions are derived from each beat's `vo` text, split
   proportionally across the beat. They are approximate but good enough to read
   a contact sheet against.
+
+### Where phrases break
+
+`groupWords` scores every possible split across a beat and takes the cheapest
+whole set, rather than cutting every fifth word and leaving the remainder. Four
+things are being avoided, and `npm run captions` counts all four:
+
+| defect | looks like |
+|---|---|
+| dangling | ends on a word pointing forward — `has a health component and` |
+| orphan | one or two words, gone in a few frames; reads as a glitch |
+| particle | splits a phrasal verb — `Enemy health ends` / `up with four…` |
+| straddle | carries a full stop mid-phrase, so it spans two sentences |
+
+**Run `npm run captions` after any retime.** It reads `captions.json` and
+`beats.yaml`, takes milliseconds, and is the only way to tell whether phrasing
+changed for the better — a contact sheet samples 30 frames out of 2000 and will
+not show you a bad break. `npm run captions <slug>` prints every phrase with its
+defects marked.
+
+Orphans and straddles should be zero. Dangling breaks should be under ~12%;
+some are genuinely unavoidable in a long clause with nowhere good to stop.
+
+**Punctuation is what makes this work, and it comes from the script.** whisper
+punctuates unreliably — `every-frame` was transcribed with 4 sentence ends where
+its script has 17 — so `retime` stamps the script's own punctuation onto every
+word it can align, and only where the alignment is clean on both sides of the
+mark. That punctuation is burned into the caption text, so a mark in the wrong
+place is a visible typo rather than a bad line break. **This means well-punctuated
+`vo:` lines directly improve the finished captions**, which is one more reason to
+rewrite them from the transcript when the take drifts.
 
 ## Composition rules
 

@@ -173,6 +173,16 @@ if (FORCE || mtime(generated) < mtime(beatsYaml)) {
 
 run('sync', 'sync-projects.ts', []);
 
+// ------------------------------------------------------------------ captions
+// Reports only; it never fails the build. Caption phrasing is judged by reading
+// the phrases, and a 30-frame contact sheet samples far too little of a 50-
+// phrase video to catch a bad break — so the check has to happen here, where it
+// is unavoidable, rather than in a QA step someone can forget.
+
+if (existsSync(captions)) {
+  run('captions', 'captions.ts', [slug]);
+}
+
 if (!DRY) {
   // Re-hashed rather than reusing `scriptNow`: retime rewrites beats.yaml, and
   // storing the pre-run hash would make the next build think the narration had
