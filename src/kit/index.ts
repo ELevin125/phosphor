@@ -6,7 +6,17 @@
  */
 
 export { Stage, type StageProps } from './Stage';
-export { Beat, Timeline, totalDuration, useBeat, useBeatStart, type BeatTiming, type BeatProps } from './Beat';
+export {
+  Beat,
+  Timeline,
+  totalDuration,
+  useBeat,
+  useBeatProgress,
+  useBeatSeconds,
+  useBeatStart,
+  type BeatTiming,
+  type BeatProps,
+} from './Beat';
 export { Board, Node, type NodeProps } from './Board';
 
 export { TitleCard, type TitleCardProps } from './TitleCard';
@@ -35,6 +45,7 @@ export * from './scene3';
 
 export { useTheme } from './ThemeContext';
 export {
+  ramp,
   useEnterStyle,
   useGestureStyle,
   useReveal,
@@ -44,6 +55,7 @@ export {
   type GestureRole,
   type MotionPreset,
 } from './motion';
+export { rgba } from './color';
 
 export { CANVAS, CONTENT, SAFE, CAPTION_BAND, GUTTER, SPACE, space } from './layout';
 export type { CodeLang } from './code/highlighter';

@@ -31,7 +31,7 @@
  * On lofi, synthwave and vapourwave — steady tempo, clear kick — it is fine,
  * and it costs no dependencies and no install step.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative } from 'node:path';
 
@@ -53,6 +53,37 @@ const BEATS_PER_BAR = 4;
 const ENTRY_ENERGY = 0.55;
 
 // --- decode -----------------------------------------------------------------
+
+/**
+ * Integrated loudness, EBU R128.
+ *
+ * The one number in here that is absolute rather than relative. `energy[]` is
+ * normalised against the track's own loudest bar, which says where the track
+ * is busy but nothing at all about how loud it is next to a voice — and every
+ * track that comes off a stock-music site is mastered near the ceiling, so a
+ * fixed `volume` multiplier lands somewhere different for each one. Measured
+ * once here so the kit can position a bed against the voiceover instead of
+ * against a number somebody picked by ear on one track and never revisited.
+ *
+ * Computed with ffmpeg's own R128 meter rather than from `samples`, because
+ * gating a loudness measurement properly is a specification, not a mean.
+ */
+const integratedLoudness = (path: string): number => {
+  // spawnSync, not execFileSync: the R128 summary goes to stderr, and
+  // execFileSync only hands back stdout.
+  const r = spawnSync(
+    'ffmpeg',
+    ['-hide_banner', '-i', path, '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'],
+    { encoding: 'utf8' },
+  );
+  // Tolerant of the `[Parsed_ebur128_0 @ 0x…]` prefixes ffmpeg puts on the
+  // lines between the heading and the figure.
+  const m = /Integrated loudness:[\s\S]{0,200}?I:\s*(-?\d+(?:\.\d+)?)\s*LUFS/.exec(r.stderr ?? '');
+  if (!m) {
+    throw new Error(`Could not read integrated loudness from ffmpeg for ${path}.`);
+  }
+  return Math.round(Number(m[1]) * 10) / 10;
+};
 
 /** Mono f32 PCM at SR, straight out of ffmpeg. */
 const decode = (path: string): Float32Array => {
@@ -301,6 +332,8 @@ export type MusicAnalysis = {
   readonly genre: string | null;
   readonly duration: number;
   readonly tempo: number;
+  /** Integrated loudness in LUFS. Absolute, unlike `energy`. */
+  readonly lufs: number;
   readonly beats: number[];
   readonly downbeats: number[];
   readonly energy: number[];
@@ -352,6 +385,7 @@ const analyse = (path: string): MusicAnalysis => {
     genre: folder === '.' ? null : folder,
     duration,
     tempo: Math.round(tempo * 10) / 10,
+    lufs: integratedLoudness(path),
     beats: beats.map((t) => Math.round(t * 1000) / 1000),
     downbeats: downbeats.map((t) => Math.round(t * 1000) / 1000),
     energy: energy.map((v) => Math.round(v * 1000) / 1000),
@@ -417,6 +451,7 @@ const writeGenerated = (): void => {
         genre: data.genre,
         duration: data.duration,
         tempo: data.tempo,
+        lufs: data.lufs,
         downbeats: data.downbeats,
         entries: data.entries,
       };
@@ -430,6 +465,8 @@ export type TrackAnalysis = {
   readonly genre: string | null;
   readonly duration: number;
   readonly tempo: number;
+  /** Integrated loudness in LUFS, so a bed can be placed under a known voice. */
+  readonly lufs: number;
   readonly downbeats: readonly number[];
   readonly entries: readonly number[];
 };

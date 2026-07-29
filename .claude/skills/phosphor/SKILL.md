@@ -125,15 +125,66 @@ Practical rules for scenes:
    correct, tidy, and sounds like bullet points being recited. Beats open on
    connectives ("So", "Now", "The thing is"), sentences run long with commas,
    and it is always "we", never "you".
-5. **Count the words and divide by 2.6 to get each beat's duration.** Do not set
+5. **Count the words and divide by 3.1 to get each beat's duration.** Do not set
    durations by feel — it is wrong every time, and being wrong by 2× is normal.
    Put the word count in the beats table so the arithmetic stays visible.
-6. Total runtime **35-50 seconds**, estimated at ~2.6 words/sec. Silent
-   explainers target 18-40s; showcases have no target.
+
+   3.1 w/s is measured, not assumed: 679 words over 216.9s of finished audio
+   across the three recorded videos (3.05, 2.96, 3.40). This figure was 2.6
+   until it was checked, which over-estimated every beat by about 20%.
+6. Total runtime **35-50 seconds**. Silent explainers target 18-40s; showcases
+   have no target. Note that every educational video actually shipped runs
+   68-75s, so this range describes an intention rather than the practice — if
+   the longer cut is the one you want, change the range rather than quietly
+   overrunning it every time.
 
 For a **showcase**, `script.md` is just: a layout sketch, the exact on-screen
 text, and an explicit list of what is deliberately NOT in the video. Do not
 invent explanatory beats the user did not ask for.
+
+## Phase 1.5 — self-review, before the script is shown
+
+The script is the one gate that cannot be re-run cheaply: everything downstream
+is built from whatever gets waved through, and review cost grows with length
+while attention does not. So the script gets reviewed **before** it is handed
+over, not instead of.
+
+**1. Run `npm run script <slug>`.** It checks what arithmetic can see — sections
+present, word counts against durations, runtime, beat-length variation, beats
+opening on a connective, "you" in the narration. Fix every `x` before going on.
+Nothing in it has an opinion about whether the script is any good.
+
+**2. Then review it yourself, against these six.** Write the answers out — a
+review that produces no text is a rubber stamp with extra steps.
+
+1. **Can every beat be shown?** For each beat, name the picture. A beat whose
+   narration has no picture is a text panel, which is the one thing this
+   architecture exists to avoid. This is the check that matters most and the
+   one most easily skipped, because a beat can read beautifully and be
+   unanimatable.
+2. **Is there a turn?** A moment where the obvious answer is demonstrated
+   wrong. Without one the video is "five things about X", which is precisely
+   what generated content reads like. Point at the beat where it happens.
+3. **Does it open on a claim, not a preamble?** The hook must not describe what
+   the video will cover.
+4. **Is it concrete?** Real API names, real numbers, a real failure. Generic
+   phrasing here becomes generic animation later.
+5. **Does it end with a guardrail?** When the video argues for a technique, the
+   last beat says when *not* to use it. `second-listener`'s "don't
+   overcomplicate it" is its strongest beat and inoculates against the
+   cargo-culting the rest of the video would otherwise cause.
+6. **Is the pacing deliberate?** At short-form length, uniform beats are fine.
+   Past ~90s, uniform beat lengths are the clearest sign nobody made an
+   editorial decision — long-form needs a held beat and a fast one.
+
+**3. A failed review means rewriting, not annotating.** If 1, 2 or 5 fails,
+revise the script and run the review again. Do not hand over a script with the
+review attached as a list of known problems — that moves the work onto the user
+and defeats the phase. Hand over what survived.
+
+**4. Show the review with the script.** Two or three sentences on what was
+checked and what changed as a result. The user is approving a script, and what
+was already ruled out is part of what they are approving.
 
 ### ⛔ STOP HERE
 
@@ -250,8 +301,10 @@ timing differs per theme, so a hold that's fine in `brut` can be dead in
 
 ```bash
 npm run studio                                   # interactive preview
+npm run script [slug]                            # Phase 1.5 script self-review
 npm run build-beats [slug]                       # beats.yaml -> generated ts
 npm run retime <slug>                            # re-time from recorded VO
+npm run captions [slug]                          # caption phrasing report
 npx tsc --noEmit                                 # typecheck
 
 ./scripts/contact-sheet.sh <comp-id> [--count N] [--cols N] [--scale S] [--debug]

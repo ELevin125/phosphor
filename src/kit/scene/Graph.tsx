@@ -52,6 +52,22 @@ export type GraphLayout =
   | { readonly kind: 'ring'; readonly rx?: number; readonly ry?: number; readonly rotate?: number }
   | { readonly kind: 'rows'; readonly rows: readonly (readonly string[])[] };
 
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * Ease both ends of a 0..1 ramp.
+ *
+ * Not a theme gesture on purpose. Gestures are springs fired by an event —
+ * something arrives, something pops — whereas `direction` is a continuous prop
+ * the caller interpolates itself, and a spring driven off an already-animated
+ * value chases a moving target and rings. This just takes the corners off a
+ * value that is handed to us.
+ */
+const smoothstep = (v: number): number => {
+  const x = clamp01(v);
+  return x * x * (3 - 2 * x);
+};
+
 /** Distance from a box centre to its edge, along a unit direction. */
 const rectRadius = (ux: number, uy: number, w: number, h: number): number => {
   const tx = Math.abs(ux) > 1e-6 ? w / 2 / Math.abs(ux) : Number.POSITIVE_INFINITY;
@@ -205,14 +221,33 @@ export const Graph: React.FC<GraphProps> = ({
         const y2 = sa.y + uy * (from + span);
 
         const dir = e.direction ?? direction;
-        const k = (dir + 1) / 2;
-        // Head sits near whichever end it points at, and rotates as it slides,
-        // so a reversal reads as the arrows turning around rather than as a cut
-        // between two diagrams.
-        const t = 0.07 + 0.86 * k;
+        const k = clamp01((dir + 1) / 2);
+
+        /*
+          Head sits near whichever end it points at, and turns as it slides, so
+          a reversal reads as the arrows coming about rather than as a cut
+          between two diagrams. Two things make that read cleanly, and both were
+          got wrong by driving position and angle linearly off the same `k`.
+
+          The slide is eased at both ends. Linear, every arrow in the diagram
+          started and stopped dead on the same frame, which is what made a
+          reversal look mechanical — nothing in the frame had any weight.
+
+          The turn is a mirror along the shaft, not a rotation in the plane.
+          Rotating 180deg means passing through 90deg, and an arrowhead square
+          across its own line is not a turning arrow, it is a broken glyph;
+          worse, it hits that pose at the midpoint of the slide, dead centre in
+          the frame where it is most visible. Flipping `scaleX` through zero
+          takes the same path a real object would — the head goes edge-on for a
+          frame or two and comes back facing the other way. Compressed into the
+          middle 40% so the thin part is brief and the arrow spends most of the
+          reversal legible.
+        */
+        const t = 0.07 + 0.86 * smoothstep(k);
         const hx = x1 + (x2 - x1) * t;
         const hy = y1 + (y2 - y1) * t;
-        const angle = (Math.atan2(uy, ux) * 180) / Math.PI + (1 - k) * 180;
+        const angle = (Math.atan2(uy, ux) * 180) / Math.PI;
+        const flip = 2 * smoothstep((k - 0.3) / 0.4) - 1;
 
         const color = toneColor(colors, e.tone ?? edgeTone);
         const p = e.pulse ?? pulse;
@@ -232,7 +267,11 @@ export const Graph: React.FC<GraphProps> = ({
               <path
                 d={`M ${head * 0.5} 0 L ${-head * 0.5} ${head * 0.42} L ${-head * 0.5} ${-head * 0.42} Z`}
                 fill={color}
-                transform={`translate(${hx} ${hy}) rotate(${angle})`}
+                // The line finishes drawing at r=1 and the head was appearing
+                // at full size on the frame r crossed 0.9 — a pop on the one
+                // element the eye is already tracking to the end of the line.
+                opacity={smoothstep((r - 0.9) / 0.1)}
+                transform={`translate(${hx} ${hy}) rotate(${angle}) scale(${flip} 1)`}
               />
             ) : null}
             {e.label && r > 0.9 ? (

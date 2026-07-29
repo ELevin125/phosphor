@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { AbsoluteFill, interpolate, Sequence, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, interpolate, Sequence, useCurrentFrame, useVideoConfig } from 'remotion';
 import { CAPTION_BAND_BOTTOM, CONTENT } from './layout';
 import { quantise } from './motion';
 import { useTheme } from './ThemeContext';
@@ -232,6 +232,35 @@ export const Timeline: React.FC<{
 
 /** The current beat's start frame, or 0 outside a beat. Never throws. */
 export const useBeatStart = (): number => useContext(BeatContext)?.start ?? 0;
+
+/**
+ * How far through the current beat we are, 0..1.
+ *
+ * Every video that animates anything needs this, and before it lived here
+ * three of them had defined it locally — identically, which is the good case.
+ * The bad case is the one this prevents: a fourth video defining it slightly
+ * differently, and a timing bug that only reproduces in one file.
+ *
+ * Clamped, because a beat's children can be mounted a frame either side of its
+ * range during a transition and animations driven past 1 snap back.
+ */
+export const useBeatProgress = (): number => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useBeat();
+  return Math.max(0, Math.min(1, frame / durationInFrames));
+};
+
+/**
+ * Seconds since this beat started.
+ *
+ * For anything with a real rate — a simulation step, a countdown — where
+ * progress through the beat is the wrong clock and wall time is the right one.
+ */
+export const useBeatSeconds = (): number => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  return frame / fps;
+};
 
 export const totalDuration = (beats: readonly BeatTiming[]): number =>
   beats.reduce((sum, b) => sum + b.durationInFrames, 0);

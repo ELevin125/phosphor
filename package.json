@@ -19,7 +19,8 @@
     "process-vo": "tsx scripts/process-vo.ts",
     "typecheck": "tsc --noEmit",
     "pretypecheck": "npm run sync",
-    "captions": "tsx scripts/captions.ts"
+    "captions": "tsx scripts/captions.ts",
+    "script": "tsx scripts/script-check.ts"
   },
   "dependencies": {
     "@remotion/captions": "4.0.499",

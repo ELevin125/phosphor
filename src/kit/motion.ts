@@ -262,3 +262,18 @@ export const useStagger = (index: number, base = 0): number => {
   const theme = useTheme();
   return base + index * theme.motion.staggerFrames;
 };
+
+/**
+ * Clamped 0..1 ramp between two points on another 0..1 value.
+ *
+ * The workhorse for sequencing inside a beat: `ramp(p, 0.3, 0.42)` is "fade
+ * this in over the stretch from 30% to 42% of the beat". Not a gesture — those
+ * are springs fired by an event and come from the theme. This is for driving
+ * something continuously off a progress value you already have, which is what
+ * `useBeatProgress` hands you.
+ *
+ * Clamped at both ends so a beat that runs long holds the final state instead
+ * of continuing past it.
+ */
+export const ramp = (p: number, from: number, to: number): number =>
+  interpolate(p, [from, to], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });

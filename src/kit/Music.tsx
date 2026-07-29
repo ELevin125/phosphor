@@ -14,8 +14,23 @@ export type MusicSpec = {
    * the default — and the track comes in somewhere else entirely.
    */
   readonly seed?: string;
-  /** 0..1, sitting under narration. */
-  readonly volume?: number;
+  /**
+   * How far the bed sits under the voiceover, in dB. Higher is quieter.
+   *
+   * This replaced a raw 0..1 `volume`, which was the wrong dial and shipped a
+   * video with music roughly twelve decibels too loud. Stock-music tracks are
+   * mastered near the ceiling — both synthwave tracks here land at -8 LUFS
+   * against a -16 LUFS voice — so a fixed multiplier means the bed's real
+   * level depends on how hot the mastering engineer ran that particular file.
+   * Expressed as a distance from the voice, the same number sounds the same
+   * under every track, which is the only thing the caller ever actually wants.
+   */
+  readonly under?: number;
+  /**
+   * Escape hatch: a final linear trim on top of the computed gain, for a track
+   * whose measured loudness lies about how present it feels. Not a level.
+   */
+  readonly trim?: number;
   readonly fadeIn?: number;
   readonly fadeOut?: number;
   /** Pin the start, in seconds. Overrides the random pick. */
@@ -56,6 +71,64 @@ export const pickEntry = (
 };
 
 /**
+ * Loudness every voiceover is normalised to — see `--lufs` in process-vo.ts.
+ * Not a guess: the audio chain enforces it, so a bed can be placed against it.
+ */
+const VOICE_LUFS = -16;
+
+/**
+ * Closest a bed may sit to the voice before it stops being a bed.
+ *
+ * The check exists because the failure is silent in every cheap way of
+ * looking at the video. A contact sheet has no sound, a typecheck has no
+ * opinion, and the render succeeds either way — the first honest signal is a
+ * person listening to a finished mp4, which is the most expensive place in
+ * the pipeline to discover a one-line mistake. Twelve decibels is generous;
+ * a bed people describe as "extremely loud" was sitting at seven.
+ */
+const MIN_SEPARATION = 12;
+
+/**
+ * Linear gain that puts `track` `under` dB below the narration.
+ *
+ * Throws rather than clamping. A caller who asks for a bed level that would
+ * bury the voice has made a mistake they cannot hear from any of the checks
+ * that run before rendering, and quietly correcting it to something sensible
+ * would hide the mistake in the one place it is still cheap to find.
+ */
+export const bedGain = (track: string, under: number, trim = 1): number => {
+  if (under < MIN_SEPARATION) {
+    throw new Error(
+      `Music "${track}" asked to sit ${under}dB under the voice; ` +
+        `the floor is ${MIN_SEPARATION}dB. Below that the bed competes with the ` +
+        `narration instead of supporting it.`,
+    );
+  }
+
+  const analysis = TRACKS[track];
+  if (!analysis) {
+    throw new Error(
+      `Unknown music track "${track}". ` +
+        `Put it in public/music/ and run \`npm run analyse-music\`.`,
+    );
+  }
+
+  /*
+    Older analyses predate the loudness measurement. Falling back to a default
+    would reintroduce exactly the guesswork this replaced, so it asks for the
+    one command that fixes it instead.
+  */
+  if (typeof analysis.lufs !== 'number') {
+    throw new Error(
+      `Music track "${track}" has no measured loudness. ` +
+        `Run \`npm run analyse-music\` to remeasure the library.`,
+    );
+  }
+
+  return 10 ** ((VOICE_LUFS - under - analysis.lufs) / 20) * trim;
+};
+
+/**
  * Background music, entering on a bar rather than at the top of the file.
  *
  * Deliberately no ducking against the voiceover. Sidechaining to speech needs
@@ -66,7 +139,8 @@ export const pickEntry = (
 export const Music: React.FC<MusicSpec> = ({
   track,
   seed,
-  volume = 0.22,
+  under = 18,
+  trim = 1,
   fadeIn = 0.6,
   fadeOut = 1.5,
   startAt,
@@ -77,6 +151,7 @@ export const Music: React.FC<MusicSpec> = ({
 
   const analysis = TRACKS[track];
   const src = analysis ? analysis.track : `${track}.mp3`;
+  const volume = bedGain(track, under, trim);
 
   const fadeInFrames = Math.round(fadeIn * fps);
   const fadeOutFrames = Math.round(fadeOut * fps);
