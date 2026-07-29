@@ -26,13 +26,18 @@ const MAX_WORDS = 7;
 /**
  * Characters a phrase may reach before it stops fitting the band.
  *
- * The band is 864px wide less ~34px of padding a side, at a 48px caption face —
- * about 34 lowercase characters a line over two lines. Three themes render
- * captions uppercase, which is roughly 15% wider, so the cap is set for the
- * worst case rather than the common one. A caption that overflows its band is a
- * worse failure than one that breaks a word early.
+ * The portrait band is 864px wide less ~34px of padding a side, at a 48px
+ * caption face — about 34 lowercase characters a line over two lines. Three
+ * themes render captions uppercase, which is roughly 15% wider, so the cap is
+ * set for the worst case rather than the common one. A caption that overflows
+ * its band is a worse failure than one that breaks a word early.
+ *
+ * A default, not a law: the landscape band is nearly twice as wide and carries
+ * its own figure. Callers inside React should pass `useLayout().captionMaxChars`
+ * rather than relying on this. It stays a parameter rather than a hook because
+ * scripts/captions.ts runs this outside React entirely.
  */
-const MAX_CHARS = 52;
+const DEFAULT_MAX_CHARS = 52;
 
 /**
  * Words that must not be left stranded at the end of a phrase.
@@ -157,6 +162,7 @@ const lengthCost = (n: number): number => {
  */
 export const groupWords = <T extends { readonly text: string }>(
   words: readonly T[],
+  maxChars: number = DEFAULT_MAX_CHARS,
 ): T[][] => {
   const count = words.length;
   if (count === 0) {
@@ -185,7 +191,7 @@ export const groupWords = <T extends { readonly text: string }>(
       const n = end - start;
       // A single word is always legal, or a very long word could make a
       // segment unsplittable and leave the whole table at infinity.
-      if (n > 1 && chars[end]! - chars[start]! - 1 > MAX_CHARS) {
+      if (n > 1 && chars[end]! - chars[start]! - 1 > maxChars) {
         continue;
       }
       /*
@@ -294,6 +300,7 @@ const splitAt = <T>(items: readonly T[], splits: readonly number[]): T[][] => {
 export const phrasesFromCaptions = (
   captions: readonly Caption[],
   boundariesMs: readonly number[] = [],
+  maxChars: number = DEFAULT_MAX_CHARS,
 ): Phrase[] => {
   // Word indices where a new beat starts.
   const splits: number[] = [];
@@ -314,7 +321,7 @@ export const phrasesFromCaptions = (
   const segments = splitAt(captions, snapToSentences(captions, splits));
 
   const phrases = segments
-    .flatMap((segment) => groupWords(segment))
+    .flatMap((segment) => groupWords(segment, maxChars))
     .map((group) => ({
       text: group.map((c) => c.text.trim()).join(' ').replace(/\s+/g, ' ').trim(),
       startMs: group[0]!.startMs,

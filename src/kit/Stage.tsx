@@ -158,6 +158,7 @@ export const Stage: React.FC<StageProps> = ({
   children,
 }) => {
   const theme = getTheme(themeName);
+  const { captionMaxChars } = PROFILES[profile];
   const { fps, width, height } = useVideoConfig();
 
   /*
@@ -196,9 +197,9 @@ export const Stage: React.FC<StageProps> = ({
   const phrases = useMemo(
     () =>
       captions && captions.length > 0
-        ? phrasesFromCaptions(captions, boundariesMs)
+        ? phrasesFromCaptions(captions, boundariesMs, captionMaxChars)
         : phrasesFromBeats(beats, fps),
-    [captions, beats, fps, boundariesMs],
+    [captions, beats, fps, boundariesMs, captionMaxChars],
   );
 
   return (

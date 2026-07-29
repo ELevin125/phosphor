@@ -24,6 +24,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { phrasesFromCaptions, type Phrase } from '../src/kit/captions/phrases';
+import { PROFILES, type ProfileName } from '../src/kit/layout';
 
 const PROJECTS = join(process.cwd(), 'projects');
 
@@ -101,7 +102,14 @@ const report = (slug: string, verbose: boolean): boolean => {
 
   const captions = JSON.parse(readFileSync(captionsPath, 'utf8'));
   const doc = parse(readFileSync(beatsPath, 'utf8'));
-  const phrases = phrasesFromCaptions(captions, boundaries(doc));
+  // The band width is a property of the frame, so the report has to score
+  // against the profile this video is actually authored for.
+  const profile = (doc.profile ?? 'portrait') as ProfileName;
+  const phrases = phrasesFromCaptions(
+    captions,
+    boundaries(doc),
+    PROFILES[profile].captionMaxChars,
+  );
   if (phrases.length === 0) {
     return true;
   }

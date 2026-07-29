@@ -1,5 +1,5 @@
 import React from 'react';
-import { Audio, interpolate, random, staticFile, useVideoConfig } from 'remotion';
+import { Audio, interpolate, random, Sequence, staticFile, useVideoConfig } from 'remotion';
 import { TRACKS } from '../music.generated';
 
 export type MusicSpec = {
@@ -156,23 +156,71 @@ export const Music: React.FC<MusicSpec> = ({
   const fadeInFrames = Math.round(fadeIn * fps);
   const fadeOutFrames = Math.round(fadeOut * fps);
 
+  /*
+    How much track is left after the entry point, rounded DOWN to a downbeat.
+
+    A 116s track under a 68s short plays once and stops with room to spare,
+    which is the only case that ever existed. Under a four-minute video the
+    same track runs out with 138 seconds to go — and it did so silently,
+    because pickEntry falls back to "any entry" when none has enough track
+    left, so the impossible request produced a plausible-looking answer.
+
+    Looping to a downbeat rather than to the end of the file is the whole
+    trick: a segment that is a whole number of bars can repeat without the ear
+    hearing a bar of the wrong length, which is exactly what makes a loop sound
+    like a loop.
+  */
+  const loopEnd = analysis
+    ? (analysis.downbeats.filter((t) => t > start).pop() ?? analysis.duration)
+    : start + videoSeconds;
+  const segFrames = Math.max(1, Math.round((loopEnd - start) * fps));
+  const passes = Math.max(1, Math.ceil(durationInFrames / segFrames));
+
+  /** The whole-video fade, evaluated in composition frames. */
+  const envelope = (globalFrame: number): number =>
+    interpolate(
+      globalFrame,
+      [
+        0,
+        fadeInFrames,
+        Math.max(fadeInFrames, durationInFrames - fadeOutFrames),
+        durationInFrames,
+      ],
+      [0, volume, volume, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+    );
+
+  /*
+    A very short taper either side of a seam. Bar-aligned loops line up
+    rhythmically but not in waveform phase, and a discontinuity mid-sample is a
+    click. Two frames is inaudible as a level change and long enough to stop
+    one. Not applied at the very start or the very end, where the real fades
+    already are — doing both would notch the opening.
+  */
+  const SEAM_FRAMES = 2;
+  const seam = (f: number, first: boolean, last: boolean, length: number): number => {
+    const inFade = first ? 1 : Math.min(1, f / SEAM_FRAMES);
+    const outFade = last ? 1 : Math.min(1, (length - f) / SEAM_FRAMES);
+    return Math.max(0, Math.min(inFade, outFade));
+  };
+
   return (
-    <Audio
-      src={staticFile(`music/${src}`)}
-      trimBefore={Math.round(start * fps)}
-      volume={(f) =>
-        interpolate(
-          f,
-          [
-            0,
-            fadeInFrames,
-            Math.max(fadeInFrames, durationInFrames - fadeOutFrames),
-            durationInFrames,
-          ],
-          [0, volume, volume, 0],
-          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-        )
-      }
-    />
+    <>
+      {Array.from({ length: passes }, (_, i) => {
+        const from = i * segFrames;
+        const length = Math.min(segFrames, durationInFrames - from);
+        const first = i === 0;
+        const last = i === passes - 1;
+        return (
+          <Sequence key={i} from={from} durationInFrames={length}>
+            <Audio
+              src={staticFile(`music/${src}`)}
+              trimBefore={Math.round(start * fps)}
+              volume={(f) => envelope(from + f) * seam(f, first, last, length)}
+            />
+          </Sequence>
+        );
+      })}
+    </>
   );
 };
