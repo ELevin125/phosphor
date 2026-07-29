@@ -302,6 +302,7 @@ timing differs per theme, so a hold that's fine in `brut` can be dead in
 ```bash
 npm run studio                                   # interactive preview
 npm run script [slug]                            # Phase 1.5 script self-review
+npm run cut <slug> [--write]                     # drop clap-marked retakes
 npm run build-beats [slug]                       # beats.yaml -> generated ts
 npm run retime <slug>                            # re-time from recorded VO
 npm run captions [slug]                          # caption phrasing report

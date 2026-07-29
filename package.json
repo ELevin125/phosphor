@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit",
     "pretypecheck": "npm run sync",
     "captions": "tsx scripts/captions.ts",
-    "script": "tsx scripts/script-check.ts"
+    "script": "tsx scripts/script-check.ts",
+    "cut": "tsx scripts/cut.ts"
   },
   "dependencies": {
     "@remotion/captions": "4.0.499",
