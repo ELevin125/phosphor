@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
-import { CAPTION_BAND, CAPTION_BAND_TOP, GUTTER, CANVAS } from '../layout';
+import { useLayout } from '../LayoutProfile';
 import { useTheme } from '../ThemeContext';
 import type { Phrase } from './phrases';
 
@@ -16,6 +16,7 @@ export const Captions: React.FC<{ readonly phrases: readonly Phrase[] }> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const theme = useTheme();
+  const layout = useLayout();
   const nowMs = (frame / fps) * 1000;
 
   const active = phrases.find((p) => nowMs >= p.startMs && nowMs < p.endMs);
@@ -27,10 +28,10 @@ export const Captions: React.FC<{ readonly phrases: readonly Phrase[] }> = ({
     <div
       style={{
         position: 'absolute',
-        top: CAPTION_BAND_TOP,
-        left: GUTTER,
-        width: CANVAS.width - GUTTER * 2,
-        height: CAPTION_BAND.height,
+        top: layout.captionBandTop,
+        left: layout.gutter,
+        width: layout.canvas.width - layout.gutter * 2,
+        height: layout.captionBand.height,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

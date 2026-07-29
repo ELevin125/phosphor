@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { AbsoluteFill } from 'remotion';
 import { CAPTION_BAND_BOTTOM, CONTENT } from '../layout';
-import { LayoutContext } from '../Beat';
+import { useContentBox } from '../LayoutProfile';
 import { SceneInset } from '../scene/Scene';
 import { toneColor, type Tone } from '../scene/draw';
 import { useTheme } from '../ThemeContext';
@@ -52,12 +52,11 @@ export type Scene3DProps = {
  * worse than the 2D one.
  */
 export const Scene3D: React.FC<Scene3DProps> = ({ camera, children }) => {
-  const { captionBand } = useContext(LayoutContext);
   const { bottom: inset } = useContext(SceneInset);
 
-  const width = CONTENT.width;
-  const height =
-    (captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM) - CONTENT.top - inset;
+  const box = useContentBox();
+  const width = box.width;
+  const height = box.height - inset;
   const space = makeSpace3(camera, width, height);
 
   return (

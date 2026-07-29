@@ -1,6 +1,5 @@
-import React, { useContext } from 'react';
-import { LayoutContext } from './Beat';
-import { CAPTION_BAND_BOTTOM, CONTENT } from './layout';
+import React from 'react';
+import { useContentBox } from './LayoutProfile';
 import { SceneInset } from './scene/Scene';
 
 export type SplitProps = {
@@ -37,8 +36,7 @@ export const Split: React.FC<SplitProps> = ({
   gap = 36,
   children,
 }) => {
-  const { captionBand } = useContext(LayoutContext);
-  const full = (captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM) - CONTENT.top;
+  const full = useContentBox().height;
 
   return (
     <SceneInset.Provider value={{ bottom: stripHeight + gap }}>

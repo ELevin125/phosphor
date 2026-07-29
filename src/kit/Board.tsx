@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import { AbsoluteFill, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Backdrop } from './Backdrop';
-import { CAPTION_BAND_BOTTOM, CONTENT } from './layout';
-import { BeatProvider, LayoutContext, type BeatTiming } from './Beat';
+import { BeatProvider, type BeatTiming } from './Beat';
+import { useContentBox } from './LayoutProfile';
 import { quantise } from './motion';
 import { useTheme } from './ThemeContext';
 
@@ -66,11 +66,10 @@ export type BoardProps = {
 export const Board: React.FC<BoardProps> = ({ beats, children }) => {
   const theme = useTheme();
   const { fps } = useVideoConfig();
-  const { captionBand } = useContext(LayoutContext);
   const frame = quantise(useCurrentFrame(), theme.motion.stepFrames);
 
-  const width = CONTENT.width;
-  const height = (captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM) - CONTENT.top;
+  const box = useContentBox();
+  const { width, height } = box;
 
   const starts = new Map<string, number>();
   let offset = 0;
@@ -152,8 +151,8 @@ export const Board: React.FC<BoardProps> = ({ beats, children }) => {
 
       <AbsoluteFill
         style={{
-          top: CONTENT.top,
-          left: CONTENT.left,
+          top: box.top,
+          left: box.left,
           width,
           height,
           /*

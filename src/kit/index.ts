@@ -57,6 +57,19 @@ export {
 } from './motion';
 export { rgba } from './color';
 
-export { CANVAS, CONTENT, SAFE, CAPTION_BAND, GUTTER, SPACE, space } from './layout';
+export {
+  CANVAS,
+  CONTENT,
+  SAFE,
+  CAPTION_BAND,
+  GUTTER,
+  SPACE,
+  space,
+  PROFILES,
+  DEFAULT_PROFILE,
+  type Layout,
+  type ProfileName,
+} from './layout';
+export { LayoutProvider, useLayout, useContentBox } from './LayoutProfile';
 export type { CodeLang } from './code/highlighter';
 export type { Phrase } from './captions/phrases';

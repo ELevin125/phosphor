@@ -20,6 +20,12 @@ type RawFile = {
   silent?: boolean;
   /** `showcase` = showing something off, not teaching it. No runtime target. */
   type?: VideoType;
+  /**
+   * Frame shape: `portrait` (1080x1920, the default) or `landscape`
+   * (1920x1080). Set once per video and read by both the composition size and
+   * the layout law, so they cannot disagree about what shape the frame is.
+   */
+  profile?: 'portrait' | 'landscape';
   beats: RawBeat[];
 };
 
@@ -81,7 +87,7 @@ const build = (slug: string): void => {
 
   const out = `// GENERATED FROM beats.yaml -- do not edit by hand.
 // Run 'npm run build-beats' after changing beats.yaml.
-import type { BeatTiming } from '@kit';
+import type { BeatTiming, ProfileName } from '@kit';
 import type { Caption } from '@remotion/captions';
 
 export const FPS = ${fps};
@@ -92,6 +98,13 @@ export const BEATS: readonly BeatTiming[] = ${JSON.stringify(beats, null, 2)} as
 export const TOTAL_FRAMES = ${total}; // ${seconds.toFixed(1)}s
 
 export const SILENT = ${doc.silent ? true : false};
+
+/**
+ * Frame shape. \`portrait\` (1080x1920) unless beats.yaml says otherwise.
+ * Root.tsx sizes the composition from this and Video.tsx passes it to Stage;
+ * the two must agree or the canvas and the layout law describe different frames.
+ */
+export const PROFILE = ${JSON.stringify(doc.profile ?? 'portrait')} as ProfileName;
 export const VIDEO_TYPE = ${JSON.stringify(doc.type ?? 'educational')};
 
 /** Path inside public/, or null until a vo.wav exists. */

@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { AbsoluteFill, interpolate, Sequence, useCurrentFrame, useVideoConfig } from 'remotion';
-import { CAPTION_BAND_BOTTOM, CONTENT } from './layout';
+import { useContentBox } from './LayoutProfile';
 import { quantise } from './motion';
 import { useTheme } from './ThemeContext';
 
@@ -29,13 +29,9 @@ type BeatContextValue = {
   readonly start: number;
 };
 
-/**
- * Whether the caption band is reserved. With captions off there is no band to
- * protect, so beats reclaim it rather than leaving 30% of the frame empty.
- */
-export const LayoutContext = createContext<{ readonly captionBand: boolean }>({
-  captionBand: true,
-});
+// Re-exported from its new home so existing importers keep working. It moved
+// because `useContentBox` needs it alongside the profile — see LayoutProfile.
+export { LayoutContext } from './LayoutProfile';
 
 const BeatContext = createContext<BeatContextValue | null>(null);
 
@@ -86,7 +82,7 @@ const justifyFor = (align: BeatAlign) =>
  */
 export const Beat: React.FC<BeatProps> = ({ id, align = 'center', children }) => {
   const { durationInFrames, overlap } = useBeat();
-  const { captionBand } = useContext(LayoutContext);
+  const box = useContentBox();
   const theme = useTheme();
   const rawFrame = useCurrentFrame();
   const frame = quantise(rawFrame, theme.motion.stepFrames);
@@ -125,16 +121,14 @@ export const Beat: React.FC<BeatProps> = ({ id, align = 'center', children }) =>
   // the moment the outgoing one has finished fading.
   const opacity = isWipe ? 1 : (1 - t) * (1 - t);
 
-  const bottom = captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM;
-
   return (
     <AbsoluteFill
       style={{
         opacity,
-        top: CONTENT.top,
-        left: CONTENT.left,
-        width: CONTENT.width,
-        height: bottom - CONTENT.top,
+        top: box.top,
+        left: box.left,
+        width: box.width,
+        height: box.height,
       }}
     >
       <div

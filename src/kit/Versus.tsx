@@ -1,6 +1,5 @@
-import React, { useContext } from 'react';
-import { CAPTION_BAND_BOTTOM, CONTENT } from './layout';
-import { LayoutContext } from './Beat';
+import React from 'react';
+import { useContentBox } from './LayoutProfile';
 import { SceneHeight } from './scene/Scene';
 import { useTheme } from './ThemeContext';
 
@@ -47,9 +46,7 @@ export const Versus: React.FC<VersusProps> = ({
   dimBottom = 0,
 }) => {
   const { colors, type, shape } = useTheme();
-  const { captionBand } = useContext(LayoutContext);
-
-  const full = (captionBand ? CONTENT.bottom : CAPTION_BAND_BOTTOM) - CONTENT.top;
+  const full = useContentBox().height;
   const half = (full - gap) / 2;
 
   const chip = (text: string, color: string): React.ReactNode => (

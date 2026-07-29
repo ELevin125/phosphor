@@ -1,6 +1,6 @@
 import React from 'react';
 import { Composition } from 'remotion';
-import { CANVAS } from './kit';
+import { PROFILES } from './kit';
 import { PROJECTS } from './registry.generated';
 
 /**
@@ -20,17 +20,23 @@ import { PROJECTS } from './registry.generated';
  */
 export const RemotionRoot: React.FC = () => (
   <>
-    {PROJECTS.map((p) => (
-      <Composition
-        key={`${p.base}-${p.theme}`}
-        id={`${p.base}-${p.theme}`}
-        component={p.component}
-        durationInFrames={p.durationInFrames}
-        fps={p.fps}
-        width={CANVAS.width}
-        height={CANVAS.height}
-        defaultProps={{ theme: p.theme, debug: false }}
-      />
-    ))}
+    {PROJECTS.map((p) => {
+      // The canvas comes from the project's own profile, not a global
+      // constant. A landscape video registered at 1080x1920 would render its
+      // whole layout into the wrong frame, and nothing upstream would say so.
+      const { canvas } = PROFILES[p.profile];
+      return (
+        <Composition
+          key={`${p.base}-${p.theme}`}
+          id={`${p.base}-${p.theme}`}
+          component={p.component}
+          durationInFrames={p.durationInFrames}
+          fps={p.fps}
+          width={canvas.width}
+          height={canvas.height}
+          defaultProps={{ theme: p.theme, debug: false }}
+        />
+      );
+    })}
   </>
 );

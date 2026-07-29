@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, Img, random, staticFile } from 'remotion';
-import { CANVAS } from './layout';
+import { useLayout } from './LayoutProfile';
 import { useTheme } from './ThemeContext';
 
 /**
@@ -25,12 +25,13 @@ const STAR_MARGIN = 900;
 const Starfield: React.FC<{ readonly offset: { x: number; y: number } }> = ({ offset }) => {
   const { backdrop } = useTheme();
   const { stars } = backdrop;
+  const { canvas } = useLayout();
   if (stars.count <= 0) {
     return null;
   }
 
-  const w = CANVAS.width + STAR_MARGIN * 2;
-  const h = CANVAS.height + STAR_MARGIN * 2;
+  const w = canvas.width + STAR_MARGIN * 2;
+  const h = canvas.height + STAR_MARGIN * 2;
 
   const points = Array.from({ length: stars.count }, (_, i) => {
     const x = random(`star-x-${i}`) * w;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CONTENT } from '../layout';
+import { useLayout } from '../LayoutProfile';
 import { PanelDecor } from '../PanelDecor';
 import { useSurfaceStyle } from '../surface';
 import { useTheme } from '../ThemeContext';
@@ -88,6 +88,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   availableWidth,
 }) => {
   const theme = useTheme();
+  const { content } = useLayout();
   const surface = useSurfaceStyle({ code: true });
   const gutterEm = showLineNumbers ? 2.6 : 1.2;
   // Shrink to fit rather than clip. See `fitCodeSize`.
@@ -95,7 +96,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
     lines,
     theme.type.size.code,
     gutterEm,
-    availableWidth ?? CONTENT.width,
+    availableWidth ?? content.width,
   );
   const rowHeight = fontSize * theme.type.lineHeight.code;
   const gutterWidth = fontSize * gutterEm;

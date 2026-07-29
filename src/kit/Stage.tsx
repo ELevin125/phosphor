@@ -7,18 +7,11 @@ import { Backdrop } from './Backdrop';
 import { Board } from './Board';
 import { CRT_FILTER_ID, CrtFilters, CrtOverlay } from './Crt';
 import { LayoutContext, Timeline, type BeatTiming } from './Beat';
+import { LayoutProvider, useLayout } from './LayoutProfile';
+import { DEFAULT_PROFILE, PROFILES, type ProfileName } from './layout';
 import { Music, type MusicSpec } from './Music';
 import { Captions } from './captions/Captions';
 import { phrasesFromBeats, phrasesFromCaptions } from './captions/phrases';
-import {
-  CANVAS,
-  CAPTION_BAND,
-  CAPTION_BAND_BOTTOM,
-  CAPTION_BAND_TOP,
-  CONTENT,
-  GUTTER,
-  SAFE,
-} from './layout';
 import { ThemeProvider } from './ThemeContext';
 
 /** `loadFont` calls `delayRender` internally; only do it once per theme. */
@@ -31,6 +24,20 @@ const ensureFonts = (theme: Theme) => {
 };
 
 const DebugOverlay: React.FC<{ readonly captionBand: boolean }> = ({ captionBand }) => {
+  const {
+    name,
+    canvas: CANVAS,
+    safe: SAFE,
+    content: CONTENT,
+    captionBand: CAPTION_BAND,
+    captionBandTop: CAPTION_BAND_TOP,
+    captionBandBottom: CAPTION_BAND_BOTTOM,
+  } = useLayout();
+  // Percentages are computed, not written into the label. They were hardcoded
+  // as 12%/20% — the portrait figures — and stayed that way in landscape,
+  // where they are 4%/9%. A debug overlay that misreports the layout law is
+  // worse than none.
+  const pct = (px: number): string => `${Math.round((px / CANVAS.height) * 100)}%`;
   const band = (
     style: React.CSSProperties,
     label: string,
@@ -54,10 +61,10 @@ const DebugOverlay: React.FC<{ readonly captionBand: boolean }> = ({ captionBand
 
   return (
     <AbsoluteFill style={{ pointerEvents: 'none', zIndex: 999 }}>
-      {band({ top: 0, left: 0, width: CANVAS.width, height: SAFE.top }, 'SAFE TOP 12%', '#FF3B30')}
+      {band({ top: 0, left: 0, width: CANVAS.width, height: SAFE.top }, `SAFE TOP ${pct(SAFE.top)}`, '#FF3B30')}
       {band(
         { top: CANVAS.height - SAFE.bottom, left: 0, width: CANVAS.width, height: SAFE.bottom },
-        'SAFE BOTTOM 20%',
+        `SAFE BOTTOM ${pct(SAFE.bottom)}`,
         '#FF3B30',
       )}
       {captionBand
@@ -78,11 +85,15 @@ const DebugOverlay: React.FC<{ readonly captionBand: boolean }> = ({ captionBand
         'CONTENT BOX',
         '#34C759',
       )}
-      {band(
-        { top: 0, right: 0, width: SAFE.right, height: CANVAS.height },
-        'RAIL',
-        '#AF52DE',
-      )}
+      {/* The action rail is a portrait concept: there is no such overlay on a
+          landscape player, so drawing one invents a constraint. */}
+      {name === 'portrait'
+        ? band(
+            { top: 0, right: 0, width: SAFE.right, height: CANVAS.height },
+            'RAIL',
+            '#AF52DE',
+          )
+        : null}
     </AbsoluteFill>
   );
 };
@@ -118,6 +129,12 @@ export type StageProps = {
    *   the beats build on each other, which is most explainers.
    */
   readonly layout?: 'stack' | 'board';
+  /**
+   * Frame shape. `portrait` is 1080x1920 for Reels and Shorts; `landscape`
+   * is 1920x1080 for long-form. Must match the profile the composition was
+   * registered with — Root.tsx sizes the canvas from the same value.
+   */
+  readonly profile?: ProfileName;
   /** Draws safe areas, caption band and content box. */
   readonly debug?: boolean;
   readonly children: React.ReactNode;
@@ -136,11 +153,33 @@ export const Stage: React.FC<StageProps> = ({
   captions,
   showCaptions = true,
   layout = 'stack',
+  profile = DEFAULT_PROFILE,
   debug = false,
   children,
 }) => {
   const theme = getTheme(themeName);
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+
+  /*
+    The composition is sized from beats.yaml's `profile`; the layout law comes
+    from this prop. They are set in two different files and there is no type
+    that ties them together, so a landscape video whose Video.tsx forgets
+    `profile={PROFILE}` renders a portrait layout into a 1920x1080 frame — a
+    content box two thirds of the way up the screen, captions off the bottom,
+    and not one thing upstream that complains.
+
+    Cheap to check here because both numbers are already in hand, and the fix
+    is always the same one line.
+  */
+  const expected = PROFILES[profile].canvas;
+  if (width !== expected.width || height !== expected.height) {
+    throw new Error(
+      `Stage profile "${profile}" expects a ${expected.width}x${expected.height} canvas, ` +
+        `but this composition is ${width}x${height}. ` +
+        `Pass profile={PROFILE} from beats.generated to <Stage>, and set ` +
+        `\`profile:\` in beats.yaml — they must name the same frame.`,
+    );
+  }
   ensureFonts(theme);
 
   /** Beat start times in ms — phrase breaks, so no caption spans two beats. */
@@ -163,41 +202,43 @@ export const Stage: React.FC<StageProps> = ({
   );
 
   return (
-    <ThemeProvider theme={theme}>
-      <AbsoluteFill style={{ backgroundColor: theme.colors.bg }}>
-        <CrtFilters />
+    <LayoutProvider profile={profile}>
+      <ThemeProvider theme={theme}>
+        <AbsoluteFill style={{ backgroundColor: theme.colors.bg }}>
+          <CrtFilters />
 
-        {audioSrc ? <Audio src={staticFile(audioSrc)} /> : null}
-        {music ? <Music {...music} /> : null}
+          {audioSrc ? <Audio src={staticFile(audioSrc)} /> : null}
+          {music ? <Music {...music} /> : null}
 
-        {/* Content is quantised; the CRT overlay on top deliberately is not. */}
-        <AbsoluteFill
-          style={{
-            filter: theme.crt.enabled ? `url(#${CRT_FILTER_ID})` : undefined,
-          }}
-        >
-          {/*
-            Board draws its own backdrop, because the starfield has to parallax
-            against the camera. Drawing one here as well would sit a static sky
-            underneath a moving one.
-          */}
-          {layout === 'board' ? null : <Backdrop />}
+          {/* Content is quantised; the CRT overlay on top deliberately is not. */}
+          <AbsoluteFill
+            style={{
+              filter: theme.crt.enabled ? `url(#${CRT_FILTER_ID})` : undefined,
+            }}
+          >
+            {/*
+              Board draws its own backdrop, because the starfield has to parallax
+              against the camera. Drawing one here as well would sit a static sky
+              underneath a moving one.
+            */}
+            {layout === 'board' ? null : <Backdrop />}
 
-          <LayoutContext.Provider value={{ captionBand: showCaptions }}>
-            {layout === 'board' ? (
-              <Board beats={beats}>{children}</Board>
-            ) : (
-              <Timeline beats={beats}>{children}</Timeline>
-            )}
-          </LayoutContext.Provider>
+            <LayoutContext.Provider value={{ captionBand: showCaptions }}>
+              {layout === 'board' ? (
+                <Board beats={beats}>{children}</Board>
+              ) : (
+                <Timeline beats={beats}>{children}</Timeline>
+              )}
+            </LayoutContext.Provider>
 
-          {showCaptions ? <Captions phrases={phrases} /> : null}
+            {showCaptions ? <Captions phrases={phrases} /> : null}
+          </AbsoluteFill>
+
+          <CrtOverlay />
+
+          {debug ? <DebugOverlay captionBand={showCaptions} /> : null}
         </AbsoluteFill>
-
-        <CrtOverlay />
-
-        {debug ? <DebugOverlay captionBand={showCaptions} /> : null}
-      </AbsoluteFill>
-    </ThemeProvider>
+      </ThemeProvider>
+    </LayoutProvider>
   );
 };

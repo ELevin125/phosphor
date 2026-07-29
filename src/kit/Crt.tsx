@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
-import { CANVAS } from './layout';
+import { useLayout } from './LayoutProfile';
 import { useTheme } from './ThemeContext';
 
 /** Evenly spaced steps for `feFuncX type="discrete"`. */
@@ -23,6 +23,7 @@ export const CRT_FILTER_ID = 'crt-quantize';
  */
 export const CrtFilters: React.FC = () => {
   const { crt } = useTheme();
+  const { canvas } = useLayout();
   if (!crt.enabled) {
     return null;
   }
@@ -42,8 +43,8 @@ export const CrtFilters: React.FC = () => {
           id={CRT_FILTER_ID}
           x="0"
           y="0"
-          width={CANVAS.width}
-          height={CANVAS.height}
+          width={canvas.width}
+          height={canvas.height}
           filterUnits="userSpaceOnUse"
           colorInterpolationFilters="sRGB"
         >

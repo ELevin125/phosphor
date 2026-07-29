@@ -145,7 +145,7 @@ const render = (entries: Entry[]): string => {
   const imports = entries
     .flatMap((e) => [
       `import { ${e.export} as ${e.ident}Component } from '${e.module}';`,
-      `import { FPS as ${e.ident}Fps, TOTAL_FRAMES as ${e.ident}Frames } from '${e.timings}';`,
+      `import { FPS as ${e.ident}Fps, TOTAL_FRAMES as ${e.ident}Frames, PROFILE as ${e.ident}Profile } from '${e.timings}';`,
     ])
     .join('\n');
 
@@ -157,6 +157,7 @@ const render = (entries: Entry[]): string => {
           `    base: '${e.base}',\n` +
           `    component: ${e.ident}Component as ProjectComponent,\n` +
           `    fps: ${e.ident}Fps,\n` +
+          `    profile: ${e.ident}Profile,\n` +
           `    durationInFrames: ${e.ident}Frames,\n` +
           `    theme: '${theme}' as ThemeName,\n` +
           `  },`,
@@ -168,6 +169,7 @@ const render = (entries: Entry[]): string => {
  * Run 'npm run sync' after adding, removing or renaming a project. */
 import type { ComponentType } from 'react';
 import type { ThemeName } from '@theme';
+import type { ProfileName } from '@kit';
 
 /** Every video component takes the theme to render in plus the debug overlay flag. */
 export type ProjectComponent = ComponentType<{
@@ -181,6 +183,8 @@ export type ProjectEntry = {
   readonly component: ProjectComponent;
   readonly fps: number;
   readonly durationInFrames: number;
+  /** Frame shape this project was authored for. */
+  readonly profile: ProfileName;
   /** The theme this project ships in. */
   readonly theme: ThemeName;
 };
