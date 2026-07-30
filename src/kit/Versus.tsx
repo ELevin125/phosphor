@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { useContentBox } from './LayoutProfile';
-import { SceneHeight } from './scene/Scene';
+import { SceneHeight, SceneInset } from './scene/Scene';
 import { useTheme } from './ThemeContext';
 
 export type VersusProps = {
@@ -46,7 +46,18 @@ export const Versus: React.FC<VersusProps> = ({
   dimBottom = 0,
 }) => {
   const { colors, type, shape } = useTheme();
-  const full = useContentBox().height;
+  /*
+    Same rule as `<Scene>`: a `<Split>` above reserves height at the bottom of
+    the content box and publishes it here, so anything that sizes itself from
+    the layout law has to shorten by it or it draws straight through the strip.
+
+    Worth having, because the strip is often exactly what a comparison needs.
+    Two halves running the same thing differently begs the question "differently
+    by how much", and that answer is a number over time, which is a strip — the
+    panes themselves have no room for it without a label landing on the picture.
+  */
+  const inset = useContext(SceneInset).bottom;
+  const full = useContentBox().height - inset;
   const half = (full - gap) / 2;
 
   const chip = (text: string, color: string): React.ReactNode => (

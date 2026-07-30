@@ -422,14 +422,48 @@ constraint, which is not the intuitive one.
 
 ## Primitives
 
-`WireGrid` (flat XZ lattice) · `WireBox` · `WireSphere` · `WireTerrain`
-(heightfield from a sampler) · `WireFrustum` (view volume — culling, near/far)
-· `WireMesh` (any `{points, edges}`) · `Tag3` · `Dot3`.
+`WireGrid` (flat XZ lattice) · `WireBox` · `WireSphere` · `WireRing` (circle or
+arc about any axis) · `WireTerrain` (heightfield from a sampler) · `WireFrustum`
+(view volume — culling, near/far) · `WireMesh` (any `{points, edges, faces?}`)
+· `Tag3` · `Dot3` · `Rot3`.
 
-`depthFade` does the job depth cueing does in a shaded render. Without it a
-wireframe is genuinely ambiguous — the Necker cube, where the eye cannot tell
-which face is nearer and flips between readings while you watch. **Orbiting the
-camera slowly resolves it far better than any static shot.**
+## `<Rot3 euler={[yaw, pitch, roll]}>` — rotations that nest
+
+Composes with whatever transform it finds above it, so nesting builds a
+hierarchy. That is the point: a gimbal IS a hierarchy, and written as nested
+components the code has the same shape as the mechanism — gimbal lock then falls
+out of the composition instead of being animated by hand. `rot={Mat3}` takes a
+matrix directly, for anything a quaternion produced.
+
+Rotation maths lives in `scene3/project.ts`: `eulerMat` / **`eulerFrom`** (the
+inverse, and where gimbal lock's discontinuity actually lives), `lerpEuler`
+(deliberately unfixed — no wrapping, no shortest-arc, because that IS the bug),
+`quatFromEuler` / `slerp` / `axisAngle`, and `angleBetween`.
+
+## Depth reads correctly, or the shape reads wrong
+
+Three rules, all learned by shipping the violation:
+
+- **`depthFade` normalises against the SCENE**, from the camera's `fit` sphere —
+  not against each wire's own extent. Per-wire hands every object the full
+  opacity ramp to itself, so a two-point spike draws at full brightness
+  whichever way it points and a far ring outshines the near face of the cube it
+  is behind. The cue then contradicts the geometry.
+- **Closed solids hide their own back.** `Wire.faces` (present on `boxWire`)
+  drives `backfaces`: `dim` (default), `hide` for true hidden-line removal, or
+  `show` for the old ambiguity. For a **convex** solid this is exact, not a
+  heuristic — an edge is hidden precisely when both faces at it point away.
+  Without it a wireframe cube is a Necker cube: the eye cannot tell which face
+  is nearer, flips between readings while you watch, and corners look like they
+  stick out when they should go in.
+- **`Dot3` is a marker on something, not the thing.** It draws at 0.4 ×
+  `dotRadius` (that token sizes the 2D `Dot`, where the dot is the whole agent)
+  and fades with scene depth. At full size it stops marking a point and becomes
+  a bead stuck through the geometry.
+
+**Orbiting the camera slowly still resolves depth far better than any static
+shot** — but stop the orbit when the claim is that something did NOT move, or
+the viewer cannot tell your motion from the object's.
 
 ## Why not Three.js
 
@@ -439,10 +473,15 @@ instead, so a 3D beat would arrive looking like it came from a different video.
 It would also need a GL backend in the headless renderer: slower, and one driver
 update from breaking.
 
-**Limitation to state plainly: there is no occlusion.** Everything draws, with
-distant edges faded. For a wireframe that is arguably correct — seeing the back
-of the box is how you read its shape — but it cannot express "the wall hides the
-enemy". That claim needs footage.
+**Limitation to state plainly: objects do not occlude EACH OTHER.** A solid
+hides its own back faces exactly, but a ring passing behind a cube is still
+drawn over it — there is no depth buffer, only paint order. So this cannot
+express "the wall hides the enemy". That claim needs footage.
+
+Adding inter-object occlusion means clipping each segment against the filled
+front faces of every solid in the scene, which is real work and, so far, work
+no video has needed. Reach for it when one does — not before, and not by
+swapping in a WebGL renderer, which brings a whole second look with it.
 
 ---
 
