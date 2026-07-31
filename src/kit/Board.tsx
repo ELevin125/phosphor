@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { AbsoluteFill, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Backdrop } from './Backdrop';
 import { BeatProvider, type BeatTiming } from './Beat';

@@ -1,11 +1,24 @@
 # The kit — component reference
 
-`src/kit` is the complete set of components a video may use. **Video files
-compose kit primitives and nothing else.** No inline styles, no `<div>`s, no
-hardcoded colours or pixel positions in `projects`.
+`src/kit` is shared code in three tiers. The layout law and the theme contract
+apply everywhere: **no hardcoded colours or pixel positions, anywhere**, and
+nothing positions itself outside the content box.
 
-If a video needs something the kit lacks: **add it to the kit first**, with
-tokens from the theme, then use it.
+| tier | what it is | rule |
+|---|---|---|
+| **frame** | `Stage`, `Beat`, layout, theme, captions, music | every video uses it; changing it changes every video |
+| **primitive** | `Scene`, `Field`, `Plot`, `Split`, `Scene3D`, `useSim`, code panels, `Box`/`Callout`/`TitleCard` | parameterised mechanisms — feed them data |
+| **narrow** | `Lanes`, `Arrow`, `Versus`, `Board` | one or two videos use these. **Do not extend them** |
+
+**Bespoke scene composition belongs in `projects/<slug>/`, and that is expected,
+not a failure.** The old rule ("if the kit lacks it, add it to the kit first")
+produced twenty-plus single-user kit components while every project still
+defined 12–43 local ones anyway — so it created shared clutter without
+preventing any bespoke work.
+
+**Promotion into the kit needs a THIRD user, not a first.** Two videos wanting
+something similar is a coincidence; three is an abstraction. See
+`docs/DECISIONS.md#d011`.
 
 ---
 
@@ -71,7 +84,10 @@ up, never written in TSX.
 
 ## Layout law (`kit/layout.ts`)
 
-Canvas 1080x1920. These are enforced by `Stage`/`Beat`, not left to videos.
+Two profiles, both derived from one function so they cannot drift in *how* they
+are computed. Enforced by `Stage`/`Beat`, not left to videos.
+
+**portrait — 1080x1920** (Reels, Shorts)
 
 | region | bounds | rule |
 |---|---|---|
@@ -81,12 +97,32 @@ Canvas 1080x1920. These are enforced by `Stage`/`Beat`, not left to videos.
 | bottom safe | y 1536–1920 (20%) | platform UI — keep empty |
 | right rail | x 972–1080 | like/comment/share — content box stops here |
 
-`GUTTER` (108) is deliberately equal to `SAFE.right`, which is what keeps the
-content box both symmetric and clear of the action rail. Lower the gutter and
-content starts colliding with platform UI in the lower third.
+The gutter (108) is deliberately equal to the right safe area, which keeps the
+content box both symmetric and clear of the action rail.
 
-`<Stage debug>` draws all of these. Render a debug contact sheet whenever you
-change layout.
+**landscape — 1920x1080** (YouTube long-form)
+
+| region | bounds |
+|---|---|
+| top safe | y 0–48 |
+| content box | x 96–1824, y 48–848 |
+| caption band | y 872–984 |
+| bottom safe | y 984–1080 |
+
+No action rail exists on a landscape player, so the gutter is padding rather
+than clearance. Long-form ships **without burned-in captions**, which returns
+the band to the content box.
+
+**Never read bounds from a module constant — call `useLayout()`.** The portrait
+constants that used to be exported are gone: a component that imported one was
+pinned to a 1080x1920 frame regardless of what it was rendered into.
+
+Type sizes are profile-resolved too. A theme declares `type.scale` as ratios;
+the profile supplies `typeBase` (40px portrait, 32px landscape) and
+`useTheme().type.size` is the resolved pixels. Never hardcode a font size.
+
+`<Stage debug>` draws all regions. `npm run check` verifies them numerically,
+which is the one you should reach for first.
 
 ---
 
@@ -95,7 +131,7 @@ change layout.
 ### `<Stage>`
 The shell. Background, fonts, audio, captions, safe-area overlay, beat timeline.
 ```
-theme?: 'neon' | 'paper' | 'brut'   beats: BeatTiming[]
+theme?: 'gizmo'                     beats: BeatTiming[]
 audioSrc?: string | null            captions?: Caption[] | null
 debug?: boolean
 ```

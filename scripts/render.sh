@@ -2,54 +2,62 @@
 #
 # Renders finished MP4s.
 #
-#   ./scripts/render.sh value-vs-reference-neon     # one composition
-#   ./scripts/render.sh value-vs-reference --themes # every theme of a video
+#   ./scripts/render.sh value-vs-reference-gizmo             # numbered render
+#   ./scripts/render.sh value-vs-reference-gizmo --deliver   # also mark final
 #
-# Output: out/<composition-id>.mp4
+# Output: out/<slug>/renders/<id>-NNN.mp4
+#
+# Renders are NUMBERED, never overwritten. A re-render that clobbered the
+# previous one is how `flow-field-gizmo (Copy 2).mp4` came to exist -- the good
+# take had already been replaced, so it got rescued by hand. See
+# docs/DECISIONS.md#d008.
+#
+# `--deliver` additionally copies the render to out/<slug>/deliver/<id>.mp4,
+# which is the one file per video that gets uploaded. That directory is the only
+# thing in out/ worth looking at.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-TARGET="${1:-}"
-if [ -z "$TARGET" ]; then
-  echo "usage: render.sh <composition-id> | <slug> --themes" >&2
+COMP="${1:-}"
+if [ -z "$COMP" ]; then
+  echo "usage: render.sh <composition-id> [--deliver] [remotion flags...]" >&2
   exit 1
 fi
 shift
 
-ALL_THEMES=0
+DELIVER=0
 EXTRA=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --themes) ALL_THEMES=1; shift ;;
+    --deliver) DELIVER=1; shift ;;
     *) EXTRA+=("$1"); shift ;;
   esac
 done
 
 ensure_bundle
-mkdir -p "$ROOT/out"
 
-render_one() {
-  local id="$1"
-  echo "› rendering $id"
-  npx remotion render "$BUNDLE_DIR" "$id" "$ROOT/out/${id}.mp4" \
-    --codec=h264 \
-    --crf=18 \
-    --log=error \
-    ${EXTRA[@]+"${EXTRA[@]}"}
-  echo "✓ out/${id}.mp4"
-}
+if [ -z "$(comp_duration "$COMP")" ]; then
+  echo "error: composition '$COMP' not found. Available:" >&2
+  comp_list | awk 'NF > 3 {print "  " $1}' >&2
+  exit 1
+fi
 
-if [ "$ALL_THEMES" = "1" ]; then
-  mapfile -t IDS < <(
-    comp_list | awk -v slug="$TARGET" '$1 ~ "^" slug "-" {print $1}'
-  )
-  if [ "${#IDS[@]}" -eq 0 ]; then
-    echo "error: no compositions matching '${TARGET}-*'" >&2
-    exit 1
-  fi
-  for id in "${IDS[@]}"; do
-    render_one "$id"
-  done
-else
-  render_one "$TARGET"
+SLUG="$(slug_of "$COMP")"
+RENDERS="$(out_dir "$SLUG" renders)"
+INDEX="$(next_render_index "$RENDERS" "$COMP")"
+OUT="$RENDERS/${COMP}-${INDEX}.mp4"
+
+echo "› rendering $COMP -> out/$SLUG/renders/${COMP}-${INDEX}.mp4"
+npx remotion render "$BUNDLE_DIR" "$COMP" "$OUT" \
+  --codec=h264 \
+  --crf=18 \
+  --log=error \
+  ${EXTRA[@]+"${EXTRA[@]}"}
+
+echo "✓ out/$SLUG/renders/${COMP}-${INDEX}.mp4"
+
+if [ "$DELIVER" = "1" ]; then
+  DELIVER_DIR="$(out_dir "$SLUG" deliver)"
+  cp "$OUT" "$DELIVER_DIR/${COMP}.mp4"
+  echo "✓ out/$SLUG/deliver/${COMP}.mp4  (upload this one)"
 fi

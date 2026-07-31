@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { AbsoluteFill, Audio, staticFile, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Audio, getInputProps, staticFile, useVideoConfig } from 'remotion';
 import type { Caption } from '@remotion/captions';
 
-import { getTheme, type Theme, type ThemeName } from '../theme';
+import { getTheme, type ThemeName, type ThemeSpec } from '../theme';
 import { Backdrop } from './Backdrop';
 import { Board } from './Board';
 import { CRT_FILTER_ID, CrtFilters, CrtOverlay } from './Crt';
@@ -10,13 +10,14 @@ import { LayoutContext, Timeline, type BeatTiming } from './Beat';
 import { LayoutProvider, useLayout } from './LayoutProfile';
 import { DEFAULT_PROFILE, PROFILES, type ProfileName } from './layout';
 import { Music, type MusicSpec } from './Music';
+import { Probe } from './Probe';
 import { Captions } from './captions/Captions';
 import { phrasesFromBeats, phrasesFromCaptions } from './captions/phrases';
 import { ThemeProvider } from './ThemeContext';
 
 /** `loadFont` calls `delayRender` internally; only do it once per theme. */
 const fontsLoaded = new Set<string>();
-const ensureFonts = (theme: Theme) => {
+const ensureFonts = (theme: ThemeSpec) => {
   if (!fontsLoaded.has(theme.name)) {
     fontsLoaded.add(theme.name);
     theme.loadFonts();
@@ -137,6 +138,17 @@ export type StageProps = {
   readonly profile?: ProfileName;
   /** Draws safe areas, caption band and content box. */
   readonly debug?: boolean;
+  /**
+   * Measures every painted element and prints it for `npm run check`.
+   *
+   * Defaults from the render's input props rather than from a prop passed down
+   * the tree. Every existing `Video.tsx` takes `{ theme, debug }` and forwards
+   * exactly those to Stage, so a third prop would mean editing all of them —
+   * and projects are gitignored user data with no undo (docs/DECISIONS.md#d001).
+   * Reading the flag here keeps the checker working on any video, including
+   * ones written before it existed.
+   */
+  readonly measure?: boolean;
   readonly children: React.ReactNode;
 };
 
@@ -155,6 +167,7 @@ export const Stage: React.FC<StageProps> = ({
   layout = 'stack',
   profile = DEFAULT_PROFILE,
   debug = false,
+  measure = Boolean((getInputProps() as { measure?: boolean }).measure),
   children,
 }) => {
   const theme = getTheme(themeName);
@@ -238,6 +251,7 @@ export const Stage: React.FC<StageProps> = ({
           <CrtOverlay />
 
           {debug ? <DebugOverlay captionBand={showCaptions} /> : null}
+          {measure ? <Probe /> : null}
         </AbsoluteFill>
       </ThemeProvider>
     </LayoutProvider>

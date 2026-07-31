@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { AbsoluteFill } from 'remotion';
-import { CAPTION_BAND_BOTTOM, CONTENT } from '../layout';
+
 import { useContentBox } from '../LayoutProfile';
 import { SceneHeight, SceneInset } from '../scene/Scene';
 import { toneColor, type Tone } from '../scene/draw';

@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { AbsoluteFill } from 'remotion';
-import { CAPTION_BAND_BOTTOM, CONTENT } from '../layout';
+
 import { useContentBox } from '../LayoutProfile';
 import { makeSpace, type Space, type World } from './space';
 

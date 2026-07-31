@@ -261,39 +261,60 @@ does not sound like reusing one track.
 
 # ⚠️ QA loop — mandatory, not optional
 
-**You cannot watch video. After EVERY scene edit you MUST run the contact sheet
-and actually read the output image.** A change is not done until a contact sheet
-has been rendered and inspected since the last edit.
+You cannot watch video. There are two checks and they answer different
+questions. **Run them in this order.**
+
+## 1. `npm run check <slug>` — the mechanical pass
 
 ```bash
-./scripts/contact-sheet.sh <slug>-<theme>                  # 12 stills
-./scripts/contact-sheet.sh <slug>-<theme> --count 20 --cols 5
-./scripts/contact-sheet.sh <slug>-<theme> --debug          # safe-area overlay
+npm run check <slug>                    # 24 sampled frames, text report
+npm run check <slug> --samples 40       # denser, for long-form
 ```
 
-Then **read the PNG** at `out/contact-sheets/<id>.png` with the Read tool.
+This measures every painted element against the layout profile and reports
+violations as text, naming the beat:
 
-Check every sheet for:
+```
+✗ overflow-x [lock] "the numbers are the readout now" right 1104 > content.right 972  — 3 samples from f412 (13.7s)
+✗ static-hold  nothing changed for 22.4s (f680–f1352)
+```
 
-- [ ] **Text overflow** — clipped code lines, truncated titles, text escaping a panel.
-- [ ] **Overlapping elements** — anything colliding with anything else.
-- [ ] **Safe areas** — nothing in the top 12%, bottom 20%, or right rail.
-      Verify with `--debug` after any layout change.
-- [ ] **Caption band** — captions inside it, nothing else inside it, never over code.
-      Phrasing is checked separately by `npm run captions`, not by eye — a sheet
-      samples too few frames to catch a bad break.
-- [ ] **Static holds** — if two consecutive samples are identical and more than
-      ~3s apart, the beat is dead. Stagger the reveals across the beat.
-- [ ] **Mid-transition end states** — confirm a `CodeDiff` actually resolves to
-      the `after` state; sample densely enough to catch it.
+It covers **text overflow, off-canvas clipping, element collisions, safe-area
+violations, caption-band intrusion, and static holds** — everything that is
+geometry. Exit code is non-zero when there are findings.
 
-Fix and re-run until clean. **Only then tell the user it's done.** Never report
-a scene as finished on the strength of a successful render — a render exits 0
-with text hanging off the frame.
+**Fix everything it reports before rendering a single image.** It is exact,
+cheap, and samples far more densely than any sheet.
 
-Verify every theme a video is registered for before calling it complete; motion
-timing differs per theme, so a hold that's fine in `brut` can be dead in
-`paper`. Footage-led videos are usually registered for one theme only.
+## 2. Contact sheet — the judgement pass
+
+```bash
+./scripts/contact-sheet.sh <slug>-gizmo                  # 12 stills
+./scripts/contact-sheet.sh <slug>-gizmo --count 20 --cols 5
+./scripts/contact-sheet.sh <slug>-gizmo --debug          # safe-area overlay
+```
+
+Read the PNG at `out/<slug>/qa/<id>.png`. It exists for the **one question
+arithmetic cannot answer**:
+
+- [ ] **Does the picture make the point?** Cover the captions. If the visual only
+      restates the words, rebuild the beat — no amount of clean geometry saves it.
+- [ ] **Does a `CodeDiff` resolve to its `after` state?** Sample densely enough
+      to catch the end of a transition.
+- [ ] **Does the composition read?** Balance, emphasis, whether the eye lands in
+      the right place.
+
+Do not use it to hunt for overflow. That is check's job, it does it better, and
+an image costs far more to read than a line of text.
+
+Caption *phrasing* is a third thing again — `npm run captions`, scored in
+milliseconds, because a sheet samples too few frames to catch a bad break.
+
+**Only tell the user it's done when check is clean and a sheet has been read
+since the last edit.** Never report a scene as finished on the strength of a
+successful render — a render exits 0 with text hanging off the frame.
+
+Every video ships in `gizmo`, so there is one composition per project.
 
 ---
 
@@ -306,26 +327,35 @@ npm run cut <slug> [--write]                     # drop clap-marked retakes
 npm run build-beats [slug]                       # beats.yaml -> generated ts
 npm run retime <slug>                            # re-time from recorded VO
 npm run captions [slug]                          # caption phrasing report
-npx tsc --noEmit                                 # typecheck
+npm run check <slug> [--samples N]               # machine QA — run this first
+npm run test                                     # unit tests
+npm run lint                                     # eslint
+npm run typecheck                                # tsc --noEmit
+npm run clean [slug] [--renders] [--all]         # wipe out/ working files
 
 ./scripts/contact-sheet.sh <comp-id> [--count N] [--cols N] [--scale S] [--debug]
-./scripts/render.sh <comp-id>                    # one MP4
-./scripts/render.sh <slug> --themes              # every theme of a video
+./scripts/render.sh <comp-id> [--deliver]        # numbered MP4 in out/<slug>/renders/
 ```
 
-Composition ids are `<slug>-<theme>`, e.g. `value-vs-reference-neon`.
-Themes: `cosmic` (default), `gizmo`, `debugview`, `ps1`, `garage`, `midnight`,
-`nightdrive`, and `neon`/`paper`/`brut` (kept only as "too clean" comparison
-points).
+Output lives at `out/<slug>/`: `qa/` (disposable), `renders/` (numbered, never
+overwritten), `deliver/` (the one file to upload). **Scratch renders and probe
+stills go in `qa/`, never at `out/` root.**
+
+Composition ids are `<slug>-gizmo`, e.g. `value-vs-reference-gizmo`. `gizmo` is
+the only theme — see `references/style.md` for why, and do not add another to
+solve a one-video design problem.
 
 # Hard rules
 
 1. **Never write TSX before the script is approved.**
-2. **Never skip the contact sheet.** Read the image, don't just render it.
+2. **Never skip QA.** `npm run check` first and fix everything it finds; then a
+   contact sheet, and actually read the image.
 3. **Never hardcode a visual value** — colours, sizes, radii, shadows and
-   springs come from the theme. See `references/style.md`.
-4. **Never position by hand in a video file.** Compose kit primitives. If the
-   kit lacks something, add it to the kit first.
+   springs come from the theme. See `references/style.md`. Read bounds from
+   `useLayout()` and sizes from `useTheme().type.size`, never a constant.
+4. **Never position by hand outside the content box.** Bespoke scene
+   composition inside `projects/<slug>/` is expected; promotion into `src/kit`
+   needs a THIRD user, not a first. See `references/kit.md`.
 5. **Never guess the Remotion API.** Check `references/remotion-api.md`; if it
    isn't there, read the `.d.ts` in `node_modules` and then add it to the
    reference.

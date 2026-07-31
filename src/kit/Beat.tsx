@@ -123,6 +123,10 @@ export const Beat: React.FC<BeatProps> = ({ id, align = 'center', children }) =>
 
   return (
     <AbsoluteFill
+      // Names the beat for the layout probe, so `npm run check` can report
+      // "overflow in beat 'guard'" instead of a bare frame number. A finding
+      // you have to bisect for is most of a finding you ignore.
+      data-phosphor-beat={id}
       style={{
         opacity,
         top: box.top,

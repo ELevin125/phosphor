@@ -5,10 +5,15 @@
 # This is the only way to check a scene without watching video, and it is a
 # REQUIRED step after every scene edit -- see .claude/skills/phosphor/SKILL.md.
 #
-#   ./scripts/contact-sheet.sh value-vs-reference-neon
-#   ./scripts/contact-sheet.sh value-vs-reference-neon --count 16 --debug
+#   ./scripts/contact-sheet.sh value-vs-reference-gizmo
+#   ./scripts/contact-sheet.sh value-vs-reference-gizmo --count 16 --debug
 #
-# Output: out/contact-sheets/<id>[-debug].png
+# Output: out/<slug>/qa/<id>[-debug].png
+#
+# This answers ONE question that arithmetic cannot: does the picture make the
+# point? Everything mechanical -- overflow, collisions, safe areas, static holds
+# -- is `npm run check`, which reports in text and is far cheaper to read. Run
+# check first and reach for a sheet when it comes back clean.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -56,8 +61,8 @@ fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-OUT_DIR="$ROOT/out/contact-sheets"
-mkdir -p "$OUT_DIR"
+SLUG="$(slug_of "$COMP")"
+OUT_DIR="$(out_dir "$SLUG" qa)"
 
 echo "› ${COMP}: ${COUNT} stills across ${DURATION} frames"
 
@@ -91,8 +96,11 @@ for f in "$TMP"/*.png; do
   ARGS+=(-label "$(cat "${f%.png}.txt")" "$f")
 done
 
-# Downscale here instead of at render time.
-TILE_W=$(awk -v s="$SCALE" 'BEGIN { printf "%d", 1080 * s }')
+# Downscale here instead of at render time. Width comes from the composition,
+# not a constant -- landscape is 1920 wide, and scaling it as though it were
+# 1080 produces tiles at half the intended size.
+WIDTH="$(comp_width "$COMP")"
+TILE_W=$(awk -v s="$SCALE" -v w="${WIDTH:-1080}" 'BEGIN { printf "%d", w * s }')
 
 OUT="$OUT_DIR/${COMP}${SUFFIX}.png"
 montage "${ARGS[@]}" \
@@ -109,5 +117,5 @@ convert "$OUT" \
   label:"$COMP  |  ${DURATION}f @ ${FPS}fps  |  $(date '+%H:%M:%S')" \
   +swap -gravity Center -append "$OUT"
 
-echo "✓ $OUT"
+echo "✓ out/$SLUG/qa/$(basename "$OUT")"
 identify -format '  %wx%h\n' "$OUT"

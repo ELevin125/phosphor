@@ -21,7 +21,12 @@
     "pretypecheck": "npm run sync",
     "captions": "tsx scripts/captions.ts",
     "script": "tsx scripts/script-check.ts",
-    "cut": "tsx scripts/cut.ts"
+    "cut": "tsx scripts/cut.ts",
+    "check": "tsx scripts/check.ts",
+    "precheck": "npm run sync",
+    "clean": "tsx scripts/clean.ts",
+    "test": "vitest run",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@remotion/captions": "4.0.499",
@@ -41,9 +46,13 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
     "tsx": "4.23.1",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "3.2.7"
   }
 }

@@ -66,3 +66,54 @@ comp_duration() {
 comp_fps() {
   comp_list | awk -v id="$1" '$1 == id {print $2}' | head -1
 }
+
+# Prints pixel width for a composition id. Contact sheets need it because the
+# tile size is a fraction of the frame, and landscape is 1920 wide where
+# portrait is 1080 -- assuming one of them makes the other's sheets useless.
+comp_width() {
+  comp_list | awk -v id="$1" '$1 == id {split($3, wh, "x"); print wh[1]}' | head -1
+}
+
+# Maps a composition id to the project it belongs to.
+#
+# Ids are `<slug>-gizmo` or `<slug>-<variant>-gizmo`, and a variant must land in
+# the same directory as its parent -- `value-vs-reference-board-gizmo` is an
+# alternate cut of `value-vs-reference`, not a project of its own. Matching the
+# LONGEST project directory that prefixes the id gets both cases right without
+# needing to know the variant names.
+slug_of() {
+  local id="$1" best=""
+  local d
+  for d in "$ROOT"/projects/*/; do
+    [ -d "$d" ] || continue
+    local name
+    name="$(basename "$d")"
+    case "$id" in
+      "$name"-*|"$name")
+        if [ "${#name}" -gt "${#best}" ]; then best="$name"; fi
+        ;;
+    esac
+  done
+  # Unknown ids still need somewhere to go rather than failing the render.
+  echo "${best:-${id%-gizmo}}"
+}
+
+# out/<slug>/<kind>/ -- see docs/DECISIONS.md#d008.
+#   qa/       contact sheets, probe stills, check output. Disposable.
+#   renders/  numbered renders. Never overwritten.
+#   deliver/  the one file per video that actually gets uploaded.
+out_dir() {
+  local dir="$ROOT/out/$1/$2"
+  mkdir -p "$dir"
+  echo "$dir"
+}
+
+# Next free NNN for a render, so a re-render never silently replaces a good take
+# and never needs a hand-typed "(Copy 2)".
+next_render_index() {
+  local dir="$1" id="$2" n=1
+  while [ -e "$dir/${id}-$(printf '%03d' "$n").mp4" ]; do
+    n=$((n + 1))
+  done
+  printf '%03d' "$n"
+}

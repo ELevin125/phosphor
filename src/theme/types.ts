@@ -56,6 +56,29 @@ export type ThemeColors = {
   readonly dimOpacity: number;
 };
 
+/**
+ * Type sizes as multiples of the profile's base size.
+ *
+ * These were absolute px, "at 1080x1920", and that is what actually blocked
+ * landscape. An 88px title is 4.6% of a 1920-tall frame and 8.1% of a 1080-tall
+ * one, so the same theme in the other profile produced type a third too large —
+ * with nothing anywhere to say so. The bounds arithmetic in `layout.ts` was
+ * already profile-aware; the type was not.
+ *
+ * A theme describing proportion rather than pixels is also the right division:
+ * "the title is 2.2 times body" is a design decision, and "body is 40px" is a
+ * fact about the frame. See docs/DECISIONS.md#d010.
+ */
+export type TypeScale = {
+  readonly title: number;
+  readonly subtitle: number;
+  readonly heading: number;
+  readonly body: number;
+  readonly code: number;
+  readonly label: number;
+  readonly caption: number;
+};
+
 export type ThemeTypography = {
   /** Big statements: titles, callouts. */
   readonly display: string;
@@ -66,16 +89,8 @@ export type ThemeTypography = {
   readonly weightDisplay: number;
   readonly weightBody: number;
   readonly weightMono: number;
-  /** Font sizes in px, at 1080x1920. */
-  readonly size: {
-    readonly title: number;
-    readonly subtitle: number;
-    readonly heading: number;
-    readonly body: number;
-    readonly code: number;
-    readonly label: number;
-    readonly caption: number;
-  };
+  /** Ratios against the profile's `typeBase`. Resolved to px by `ThemeProvider`. */
+  readonly scale: TypeScale;
   readonly lineHeight: {
     readonly tight: number;
     readonly normal: number;
@@ -350,7 +365,14 @@ export type ThemeGlass = {
   readonly hairline: string;
 };
 
-export type Theme = {
+/**
+ * A theme as authored, before a frame is known.
+ *
+ * `ThemeSpec` is what a theme file exports; `Theme` is what components consume,
+ * with `type.size` resolved into px for the active profile. The split is what
+ * makes it impossible to read a size that has not been resolved.
+ */
+export type ThemeSpec = {
   readonly name: string;
   /** One line on the feel this theme is going for. Shown in the studio. */
   readonly description: string;
@@ -374,4 +396,18 @@ export type Theme = {
    * `delayRender` inside `loadFont` holds the render until fonts are ready.
    */
   readonly loadFonts: () => void;
+};
+
+/**
+ * A theme resolved against a layout profile — what `useTheme()` returns.
+ *
+ * `type.size` is present here and only here, so a component cannot accidentally
+ * read a ratio where it wanted pixels: the ratios live under `type.scale` and
+ * the pixels under `type.size`, and only the resolved theme has the latter.
+ */
+export type Theme = Omit<ThemeSpec, 'type'> & {
+  readonly type: ThemeTypography & {
+    /** Font sizes in px for the active profile. */
+    readonly size: TypeScale;
+  };
 };

@@ -9,11 +9,9 @@ Every colour, font, size, radius, shadow and spring preset lives in
 size, or a spring config anywhere in `src/kit` or `projects`, it is a bug —
 add a token instead.
 
-Swapping themes is one line in `src/theme/index.ts`:
-```ts
-export const DEFAULT_THEME: ThemeName = 'neon';
-```
-or per-composition via the `theme` prop.
+This rule still holds with only one theme shipping. It is what keeps visual
+values in one editable place, and it is the reason a second theme would be a
+new file rather than a hunt through the kit.
 
 ## Backdrop and glass
 
@@ -45,43 +43,35 @@ image behind code is a *worse* result than an abstract wash, because it competes
 for attention with the thing the viewer is meant to read. Raise `veil` if
 contrast suffers.
 
-## The themes
+## The theme
 
-Seven, varying palette, type **and motion character**. The first four read
-clean; `garage`, `debugview` and `ps1` are deliberately not.
+One: **gizmo**. Engine-viewport structure in a deep-space palette — viewport
+grid, square corners, mono throughout, star gold and lilac on charcoal. The
+violet is a TINT on charcoal, not the subject: a saturated indigo turns a whole
+1080x1920 frame purple and fights any footage placed on it.
 
-- **neon** — dark terminal. Cyan `#3DE0FF` on near-black, Space Grotesk,
-  tokyo-night. Snappy overshoot (d14/s170, 16f).
-- **paper** — editorial textbook. Rust `#C2410C` on warm off-white, Fraunces
-  serif, vitesse-light. Slow and settled, no bounce (d26/s95, 24f).
-- **brut** — brutalist poster. Flat blue `#2B2BFF` on bone, Archivo Black,
-  `10px 10px 0` hard shadows, square. Hard clamped snap (d30/s260, 9f).
-- **midnight** — retro anime night drive. Hot yellow `#F5E14F` on navy, frosted
-  glass panels, hairline Jost 300, poimandres. Smooth glide (d22/s120, 20f).
-- **garage** — late-night workshop. Sodium `#FF8C21` on midnight blue-black,
-  cream body, condensed Oswald, **no borders** (halogen falloff instead),
-  heavy grain, gruvbox-dark-medium. Weighty (d30/mass1.9, 26f).
-- **debugview** — engine viewport. Missing-texture `#FF00FF` on viewport grey,
-  wireframe-green borders, gizmo-yellow bounding boxes on everything, mono
-  throughout, monokai. Instant (1 frame, clamped).
-- **ps1** — fifth-gen console on a CRT. Amber-gold `#FFC93C` on bruised violet,
-  Chakra Petch, vesper, **real pixelation and colour quantisation**. Choppy
-  stepped motion, vertex jitter, wipe transitions.
+There were ten. Nine shipped zero videos, and each new token in `types.ts` cost
+ten hand-written blocks to add — a tax paid on every visual feature, for
+variants nobody used. **Do not add a theme to solve a design problem in one
+video.** Change gizmo, or add a token.
 
-`garage`, `debugview` and `ps1` exist because the first four read as too clean —
-"corporate" — for a personal gamedev account. If a new theme feels safe, it
-probably is. Grit comes from specifics: a real light source with falloff,
-visible grain, borderless panels, ornament that serves no function, motion with
-actual mass, a deliberate in-joke, or genuine signal degradation.
+The lesson worth keeping from the nine: if a theme feels safe, it is. Grit
+comes from specifics — a real light source with falloff, visible grain,
+borderless panels, ornament that serves no function, motion with actual mass, a
+deliberate in-joke, or genuine signal degradation. That applies to gizmo's
+tokens now rather than to a choice between skins.
 
-Adding a theme: copy the closest file, change the tokens, register it in
-`src/theme/index.ts`, and **register its Shiki theme** in
+If a second theme is ever genuinely wanted: copy `gizmo.ts`, change the tokens,
+register it in `src/theme/index.ts`, and **register its Shiki theme** in
 `kit/code/highlighter.ts` — themes are loaded eagerly, so an unregistered one
 throws `Theme \`x\` not found` at render.
 
 ## CRT and low-resolution (`crt`)
 
-`ps1` is the only theme using it. Split deliberately in two:
+**gizmo sets `enabled: false`, so none of this currently renders.** The tokens
+and `kit/Crt.tsx` are kept because the effect is genuinely hard to get right and
+was working; the notes below are what it cost to learn. Split deliberately in
+two:
 
 - **Content filter** (`pixelSize`, `posterizeLevels`) — an SVG filter applied to
   the whole content layer, so text is *genuinely* pixelated and colour-crushed.
@@ -113,8 +103,8 @@ Beyond spring configs, three tokens change how a theme *moves*:
 - **`transition`** — `fade` cross-dissolves; `wipe` sweeps a hard edge with a
   bright leading bar.
 
-**Sliding and fading are the safe options and read as corporate.** `ps1` sets
-`travelPx: 0` and `enterScale: 0.7` so things punch in by *scaling* instead.
+**Sliding and fading are the safe options and read as corporate.** Setting
+`travelPx: 0` and `enterScale: 0.7` makes things punch in by *scaling* instead.
 That single swap does more to change the feel than any colour choice.
 
 A wipe must **cover** rather than dissolve: the outgoing beat holds full opacity
@@ -127,12 +117,13 @@ decoration — without it, a wipe between two similar layouts reads as tearing.
 
 Ornament drawn on every panel by `kit/PanelDecor.tsx`. Two kinds:
 
-- **`stencil`** — small workshop-signage marks in a corner (`garage`). The
+- **`bounds`** — corner brackets and a coordinate readout on everything,
+  including things that need no bounding box. **This is what gizmo uses**, in
+  lilac so it never competes with the gold accent. The excess is the joke; do
+  not "fix" it.
+- **`stencil`** — small workshop-signage marks in a corner. Unused by gizmo. The
   `frequency` token keeps it occasional; at `1` it stops being ornament and
   starts being noise.
-- **`bounds`** — corner brackets and a coordinate readout on everything,
-  including things that need no bounding box (`debugview`). That excess is the
-  joke; do not "fix" it.
 
 Marks are chosen with Remotion's **seeded** `random()`, never `Math.random` —
 an unseeded pick would re-roll every frame and flicker for the entire render.
@@ -144,9 +135,8 @@ Nothing the viewer needs goes in a decor slot.
 
 Every Japanese webfont on Google Fonts is split into ~120 unicode-range chunks,
 so pulling one in for a couple of ornamental katakana costs ~100 network
-requests per render. `garage` therefore ships stencil marks only. The theme
-supports katakana if you decide the trade is worth it — see the comment in
-`src/theme/garage.ts`.
+requests per render. That is why `decor.glyphs` is empty in gizmo. The token is
+still honoured if you decide the trade is worth it.
 
 ## Working with gameplay footage
 
@@ -258,12 +248,18 @@ rewrite them from the transcript when the take drifts.
 
 # Why the themes all looked the same (and what fixed it)
 
+Kept because the diagnosis outlived the themes, and it is the reason the kit is
+shaped the way it is.
+
 The first eight themes were, honestly, one design with eight paint jobs. The
 cause was not the theme system — it was that the kit could only draw **one
 shape**: a rounded rectangle with a label and a body. `TitleCard`, `Box`,
 `Callout`, `CodePanel` and `Compare` are all that rectangle in a centred column.
 Varying fill, border, radius, font and easing cannot make two identical
 compositions look different.
+
+The general form: **a skin cannot rescue a weak vocabulary.** When a video looks
+flat, the fix is a better picture, not a new token.
 
 Two things changed:
 
@@ -283,14 +279,13 @@ Two things changed:
 | `tagStyle` | `plain` \| `boxed` \| `bracket` (leader line) |
 | `arrowHead` | arrowhead size |
 
-The same scene through `cosmic` is inked line-work: solid gold markers, stamped
-ghosts, a faint dot lattice. Through `debugview` it is a wireframe: hollow
-magenta rings, dashed paths, a full lattice, coordinate brackets. Those are
-different *pictures*, which is the bar a theme has to clear.
+These change the *picture*, not the paint. The same scene drawn with solid
+markers, stamped ghosts and a faint dot lattice is a different image from one
+drawn as hollow rings, dashed paths and coordinate brackets — and that is the
+bar a theme has to clear before it earns a file.
 
-When adding a theme, decide its drawing style deliberately. `DEFAULT_DRAW` in
-`theme/defaults.ts` exists only so the three legacy themes do not need editing
-every time this interface grows — a real theme spells every token out.
+gizmo spells every one of these out. There is no longer a `DEFAULT_DRAW`
+fallback; a drawing style is a design decision, not a default.
 
 # Gestures
 
@@ -320,24 +315,6 @@ Slow, elegant fading and sliding reads as corporate. Keep entrances short — 8 
 Board clips to the content box, so a neighbouring cell can never intrude into
 the caption band. Set `zoom` below 1 on a node to pull back and show a cell
 with its neighbours — the payoff shot a stack layout structurally cannot do.
-
-# Theme lineage
-
-Several themes are deliberate crosses rather than fresh starts, and the notes
-in each file say which parent gave what:
-
-- `cosmic` — a deep-space palette. `debugview`'s posture plus `midnight`'s
-  glass. Starfield backdrop, star-gold accent.
-- `gizmo` — `debugview`'s structure with `cosmic`'s colours. Viewport grid,
-  square corners, mono throughout, star gold and lilac. The violet is a TINT on
-  charcoal, not the subject: cosmic's saturated indigo turns a whole 1080x1920
-  frame purple and fights any footage placed on it.
-- `nightdrive` — `midnight`'s palette with the later motion character. Exists
-  because midnight's 20-30 frame springs read as elegant, and elegant reads as
-  corporate; `midnight` itself is left alone so old renders do not move.
-
-When a theme is "X but Y", make it a new file rather than editing X. Anything
-already rendered through X should stay reproducible.
 
 # Colour on top of footage
 

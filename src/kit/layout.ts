@@ -14,8 +14,11 @@
  * they are computed from. Everything else in the kit reads a resolved profile
  * rather than the module-level constants.
  *
- * The module-level exports at the bottom are the portrait profile, unchanged,
- * and exist so the migration can happen one component at a time.
+ * Every component reads a resolved profile via `useLayout()`. There used to be
+ * a set of module-level portrait constants here as a migration shim; they are
+ * gone, because a component that imported one was pinned to a 1080x1920 frame
+ * no matter what it was rendered into — which is exactly the bug landscape
+ * would hit, silently, in the components that had not been converted yet.
  */
 
 export type ProfileName = 'portrait' | 'landscape';
@@ -43,6 +46,16 @@ type ProfileInput = {
    * the average.
    */
   readonly captionMaxChars: number;
+  /**
+   * Body-text size in px. Every other size is a multiple of it, set by the
+   * theme's `type.scale`.
+   *
+   * Belongs to the profile because it is a fact about the frame, not a design
+   * decision: the same theme in a 1080-tall frame needs smaller absolute type
+   * than in a 1920-tall one, and which multiple of body a title should be does
+   * not change between them. See docs/DECISIONS.md#d010.
+   */
+  readonly typeBase: number;
 };
 
 export type Layout = {
@@ -59,6 +72,8 @@ export type Layout = {
   readonly captionBandTop: number;
   readonly captionBandBottom: number;
   readonly captionMaxChars: number;
+  /** Body-text size in px, which the theme's ratios are resolved against. */
+  readonly typeBase: number;
   /** The only rectangle a video's visuals may occupy. */
   readonly content: {
     readonly top: number;
@@ -87,6 +102,7 @@ const derive = (name: ProfileName, i: ProfileInput): Layout => {
     captionBandTop,
     captionBandBottom: captionBandTop + i.captionHeight,
     captionMaxChars: i.captionMaxChars,
+    typeBase: i.typeBase,
     content: {
       ...content,
       width: content.right - content.left,
@@ -115,6 +131,8 @@ export const PROFILES: Record<ProfileName, Layout> = {
     captionHeight: 176,
     captionGap: 24,
     captionMaxChars: 52,
+    // 40px is what every shipped short was authored and reviewed at.
+    typeBase: 40,
   }),
 
   /*
@@ -140,27 +158,23 @@ export const PROFILES: Record<ProfileName, Layout> = {
     captionHeight: 112,
     captionGap: 24,
     captionMaxChars: 104,
+    /*
+      Smaller in absolute terms, because the frame is 44% shorter and the
+      viewing context is different — long-form is watched on a bigger screen
+      from further away, so type can occupy less of the frame and stay just as
+      readable. Anchoring to frame height alone would give 22px, which is too
+      small to read on a phone; anchoring to width would give 71px, which is
+      absurd. 32px is the practical figure for 1080p video body text.
+
+      UNVERIFIED: no landscape video has been made yet. This is the first
+      number to check against the pilot. See docs/STATUS.md.
+    */
+    typeBase: 32,
   }),
 };
 
 /** The profile assumed by anything that has not been handed one. */
 export const DEFAULT_PROFILE: ProfileName = 'portrait';
-
-// --- portrait constants ------------------------------------------------------
-// The original module-level API, derived from the portrait profile so the two
-// cannot disagree. Components are being migrated to `useLayout()`; until that
-// is finished these keep every existing call site working unchanged.
-
-const P = PROFILES.portrait;
-
-export const CANVAS = P.canvas;
-export const SAFE = P.safe;
-export const GUTTER = P.gutter;
-export const CAPTION_BAND = P.captionBand;
-export const CAPTION_BAND_TOP = P.captionBandTop; // 1360
-export const CAPTION_BAND_BOTTOM = P.captionBandBottom; // 1536
-/** x: 108..972, y: 230..1336 */
-export const CONTENT = P.content;
 
 /**
  * Vertical rhythm unit. Use multiples of this for gaps.

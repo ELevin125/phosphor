@@ -26,6 +26,11 @@ export const Captions: React.FC<{ readonly phrases: readonly Phrase[] }> = ({
 
   return (
     <div
+      // Read by the layout probe (scripts/check.ts): everything inside this
+      // subtree is expected to be in the band, and everything outside it is
+      // expected to stay out. Without the marker the probe cannot tell a caption
+      // from a stray text panel that has drifted into the band.
+      data-phosphor="caption"
       style={{
         position: 'absolute',
         top: layout.captionBandTop,

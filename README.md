@@ -1,17 +1,31 @@
 # Phosphor
 
-A toolkit for building short-form explainers — the vertical
-1080×1920 videos that go on Reels and Shorts — as code rather than as a timeline
-in an editor.
+A toolkit for building programming explainers — the short vertical videos that
+go on Reels and Shorts — as code rather than as a timeline in an editor.
 
 It is built on [Remotion](https://remotion.dev), so a video is a React
 component. What Phosphor adds on top is the boring, repetitive part of making a
 lot of them: a themed component kit, a world-unit scene system, offline audio
-processing for voiceovers, beat detection for music, and automatic re-timing of
-the whole video against a recording of you actually reading the script.
+processing for voiceovers, beat detection for music, automatic re-timing of the
+whole video against a recording of you actually reading the script, and a
+machine QA pass that measures the finished frame instead of asking you to squint
+at it.
 
 > **Status:** built for one person's workflow and generalised afterwards.
-> It works, but expect rough edges outside the paths described here.
+> Short-form works and has shipped. Landscape long-form is designed but
+> unproven — see [docs/STATUS.md](docs/STATUS.md).
+
+## Documentation
+
+`docs/` is written to bring someone — or an agent — up to speed without reading
+the source first:
+
+| doc | answers |
+|---|---|
+| [FORMAT.md](docs/FORMAT.md) | what a Phosphor video *is* — editorial doctrine, the rules a video must satisfy |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | how the system is built — layers, pipeline, where to put a new thing |
+| [DECISIONS.md](docs/DECISIONS.md) | why it is built that way, and what each decision cost |
+| [STATUS.md](docs/STATUS.md) | what is done, what is unverified, what is next |
 
 ## How it's meant to be used
 
@@ -42,11 +56,13 @@ the simulation and let it produce the picture.
 ## How it fits together
 
 ```
-src/kit/      the component library — scenes, captions, code panels, music
-src/theme/    ten themes; no component may hardcode a visual value
+src/kit/      the component library — frame, primitives, and a narrow tail
+src/theme/    the token contract, and gizmo
 scripts/      the pipeline (audio, timing, music analysis, QA, render)
+docs/         format doctrine, architecture, decisions, status
 projects/     your videos — gitignored, see below
 public/       your voiceovers, footage and music — gitignored
+out/<slug>/   qa/ (disposable), renders/ (numbered), deliver/ (upload this)
 ```
 
 **The repo is the engine, not the videos.** A video lives in `projects/<slug>/`
@@ -79,7 +95,7 @@ A project is a directory with a `beats.yaml` (timing and narration) and a
 
 ```
 projects/my-video/
-  beats.yaml        # slug, theme, and one entry per beat
+  beats.yaml        # slug, theme, profile, and one entry per beat
   script.md         # the script you read aloud
   Video.tsx         # exports `Video`, takes { theme, debug }
 ```
@@ -97,8 +113,8 @@ always safe to run and cheap when there is nothing to do. `--force` rebuilds
 everything; `--dry` shows what it would do.
 
 Registration is automatic — `npm run sync` scans `projects/` and writes
-`src/registry.generated.ts`, and it runs ahead of `studio`, `render` and
-`typecheck`. You never edit `src/Root.tsx` to add a video.
+`src/registry.generated.ts`, and it runs ahead of `studio`, `render`, `check`
+and `typecheck`. You never edit `src/Root.tsx` to add a video.
 
 ## The voiceover pipeline
 
@@ -116,6 +132,11 @@ that copy, so settings can be re-tried freely.
 `npm run retime <slug>` transcribes locally with whisper.cpp, then aligns the
 script against the transcript with Needleman–Wunsch and rewrites every beat
 duration from the real word timings.
+
+**The build stops between transcribing and captioning.** Whisper's mistakes are
+function words that no larger model reliably fixes, and the transcript becomes
+the burned-in caption text — so it writes `transcript.md` and waits for you to
+read it. That pause is deliberate.
 
 The alignment step is why improvising is survivable. If you paraphrase a line,
 the mismatch is absorbed locally instead of desynchronising every beat after it,
@@ -158,18 +179,59 @@ at eight months later when a track gets claimed.
 
 ## QA
 
-You cannot watch a video while building it. `scripts/contact-sheet.sh` renders
-stills at fixed intervals and montages them into one labelled grid in
-`out/contact-sheets/`.
+You cannot watch a video while building it. There are two checks, and they
+answer different questions.
 
 ```bash
-./scripts/contact-sheet.sh <slug>-<theme> [--count N] [--debug]
-./scripts/render.sh <slug>
+npm run check <slug>                          # geometry, as text
+./scripts/contact-sheet.sh <slug>-gizmo       # stills, for judgement
 ```
 
-`--debug` overlays the platform safe areas and the caption band.
+**`npm run check` is the one to run first.** It renders sample frames with a
+measurement probe mounted, walks the DOM, and reports every violation as text —
+naming the beat:
+
+```
+✗ overflow-x [lock] "the numbers are the readout now" right 1104 > content.right 972
+✗ static-hold  nothing changed for 22.4s (f680–f1352)
+```
+
+It covers text overflow, off-canvas clipping, collisions, safe-area violations,
+caption-band intrusion and static holds. Exit code is non-zero when it finds
+something, so it can gate a build.
+
+The **contact sheet** is for the one question arithmetic cannot answer: does the
+picture make the point? It montages stills into a labelled grid in
+`out/<slug>/qa/`. `--debug` overlays the safe areas and the caption band.
+
+Caption *phrasing* is a third thing again — `npm run captions` scores it in
+milliseconds, because a 12-frame sheet samples far too little of a 50-phrase
+video to catch a bad break.
+
+```bash
+npm run test        # unit tests over the maths that fails silently
+npm run lint
+npm run typecheck
+npm run clean       # wipe out/<slug>/qa and the bundle
+```
+
+## Rendering
+
+```bash
+./scripts/render.sh <slug>-gizmo             # out/<slug>/renders/<id>-001.mp4
+./scripts/render.sh <slug>-gizmo --deliver   # also copies to deliver/
+```
+
+Renders are **numbered, never overwritten** — a re-render cannot silently
+replace a take you wanted. `deliver/` holds the one file per video that actually
+gets uploaded, and is the only directory in `out/` worth looking at.
 
 ## Layout
+
+Two profiles, derived from one function so they cannot drift in how they are
+computed.
+
+**portrait — 1080×1920** (Reels, Shorts)
 
 | region | bounds |
 |---|---|
@@ -179,25 +241,37 @@ stills at fixed intervals and montages them into one labelled grid in
 | bottom safe | y 1536–1920 |
 | right action rail | x 972–1080 |
 
+**landscape — 1920×1080** (YouTube long-form)
+
+| region | bounds |
+|---|---|
+| top safe | y 0–48 |
+| content box | x 96–1824, y 48–848 |
+| caption band | y 872–984 |
+| bottom safe | y 984–1080 |
+
 Content may only occupy the content box; captions only the band. Those bounds
-exist because Instagram and YouTube both overlay their own UI, and anything
-outside them will be covered by a username or a row of buttons.
+exist because the platforms overlay their own UI, and anything outside them will
+be covered by a username or a row of buttons.
+
+Read them with `useLayout()`. There are no module-level layout constants — a
+component that imported one was pinned to a 1080×1920 frame no matter what it
+was rendered into.
 
 ## Themes
 
-Ten, in `src/theme/`, all implementing the token interface in
-`src/theme/types.ts`. They vary palette, type **and motion character** — a theme
-controls how things move, not just what colour they are.
-
-Each project names its theme in `beats.yaml`. To compare one video across every
-theme at once:
-
-```bash
-PHOSPHOR_THEMES=1 npm run studio
-```
+One: `gizmo`, in `src/theme/`, implementing the token interface in
+`src/theme/types.ts`. There were ten; nine shipped zero videos while taxing
+every new token ten hand-written blocks, so they were cut. See
+[D002](docs/DECISIONS.md#d002).
 
 **No component may hardcode a visual value.** A hex code or a px font size
-anywhere in `src/kit` or `projects` is a bug; add a token instead.
+anywhere in `src/kit` or `projects` is a bug; add a token instead. This still
+holds with one theme — it is what keeps visual values in one editable place.
+
+Type sizes are **ratios**, not pixels. The theme says a title is 2.2× body; the
+profile says body is 40px in portrait and 32px in landscape. Read the resolved
+values from `useTheme().type.size`.
 
 ## Licence
 

@@ -1,25 +1,15 @@
 import { Config } from '@remotion/cli/config';
-import path from 'node:path';
+import { withAliases } from './scripts/webpack-override';
 
 Config.setVideoImageFormat('jpeg');
 Config.setOverwriteOutput(true);
 
 /**
- * Remotion's bundler does not read `paths` out of tsconfig.json, so the
- * `@kit` / `@theme` aliases have to be mirrored here or imports fail at bundle
- * time (while the editor happily resolves them).
+ * The alias list itself lives in scripts/webpack-override.ts, because
+ * `npm run check` bundles programmatically and never reads this file. Keeping
+ * one copy is what stops the two bundlers disagreeing about how to resolve
+ * `@projects`.
  */
-Config.overrideWebpackConfig((current) => ({
-  ...current,
-  resolve: {
-    ...current.resolve,
-    alias: {
-      ...current.resolve?.alias,
-      '@kit': path.resolve(process.cwd(), 'src/kit/index.ts'),
-      '@theme': path.resolve(process.cwd(), 'src/theme/index.ts'),
-      '@projects': path.resolve(process.cwd(), 'projects'),
-    },
-  },
-}));
+Config.overrideWebpackConfig(withAliases);
 
 export {};

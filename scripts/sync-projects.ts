@@ -11,11 +11,9 @@
  * emitted as a broken import.
  *
  * Composition ids stay `<slug>-<theme>`, which render.sh and contact-sheet.sh
- * both parse.
- *
- * Set PHOSPHOR_THEMES=1 when running the studio to register every project
- * against every theme instead of only its chosen one. That is the theme-picking
- * harness; it is off by default because it multiplies the sidebar by ten.
+ * both parse. There is one theme now (docs/DECISIONS.md#d002), so in practice
+ * that is always `<slug>-gizmo` — the suffix is kept because every script,
+ * habit and shell history in use expects it.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,28 +25,6 @@ const OUT = join(ROOT, 'src', 'registry.generated.ts');
 
 /** Theme used when beats.yaml does not name one. */
 const DEFAULT_THEME = 'gizmo';
-
-/**
- * The theme-picking harness: register every project against every theme.
- *
- * Expanded here rather than in Root.tsx because this runs in node, where the
- * environment is simply available — reading it from inside the bundle would
- * depend on how Remotion forwards env vars to the browser.
- */
-const ALL_THEMES = process.env.PHOSPHOR_THEMES === '1';
-
-/** Theme names, read from the source of truth rather than duplicated here. */
-const themeNames = (): string[] => {
-  const src = readFileSync(join(ROOT, 'src', 'theme', 'index.ts'), 'utf8');
-  const m = src.match(/export const themes\s*=\s*\{([^}]*)\}/);
-  if (!m?.[1]) {
-    throw new Error('Could not find the themes object in src/theme/index.ts');
-  }
-  return m[1]
-    .split(',')
-    .map((s) => s.trim().split(':')[0]?.trim() ?? '')
-    .filter((s) => s.length > 0);
-};
 
 type Variant = {
   /** Suffix appended to the slug, e.g. `board` -> `value-vs-reference-board-<theme>`. */
@@ -73,7 +49,7 @@ type Entry = {
   export: string;
   /** Import specifier for the timings module. */
   timings: string;
-  /** Themes to register this component against — one, unless PHOSPHOR_THEMES=1. */
+  /** Themes to register this component against. One, since D002. */
   themes: string[];
   /** Unique, valid JS identifier used for this entry's imports. */
   ident: string;
@@ -111,7 +87,7 @@ const discover = (): { entries: Entry[]; unbuilt: string[] } => {
     }
 
     const doc = (parse(readFileSync(yamlPath, 'utf8')) as BeatsFile | null) ?? {};
-    const themes = ALL_THEMES ? themeNames() : [doc.theme ?? DEFAULT_THEME];
+    const themes = [doc.theme ?? DEFAULT_THEME];
     const timings = `@projects/${slug}/beats.generated`;
 
     entries.push({
@@ -205,13 +181,10 @@ if (entries.length === 0) {
 } else {
   let count = 0;
   for (const e of entries) {
-    console.log(`  ${e.base}-${e.themes.length === 1 ? e.themes[0] : `{${e.themes.length} themes}`}`);
+    console.log(`  ${e.base}-${e.themes[0]}`);
     count += e.themes.length;
   }
   console.log(`› registered ${count} composition${count === 1 ? '' : 's'}`);
-  if (!ALL_THEMES) {
-    console.log('  (PHOSPHOR_THEMES=1 to register every theme for comparison)');
-  }
 }
 
 for (const slug of unbuilt) {

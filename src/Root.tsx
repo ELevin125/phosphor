@@ -14,9 +14,8 @@ import { PROJECTS } from './registry.generated';
  * Ids are `<slug>-<theme>`, which render.sh and contact-sheet.sh both parse.
  * `--props='{"debug":true}'` overlays the safe areas on any of them.
  *
- * Each project ships in one theme, named in its beats.yaml. Run the studio with
- * PHOSPHOR_THEMES=1 to register every project against every theme instead —
- * that is the harness for choosing a look, and it multiplies the sidebar by ten.
+ * Each project ships in one theme, named in its beats.yaml. There is one theme
+ * (docs/DECISIONS.md#d002), so this is one composition per project.
  */
 export const RemotionRoot: React.FC = () => (
   <>

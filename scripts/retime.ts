@@ -36,7 +36,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   downloadWhisperModel,
@@ -374,8 +374,12 @@ const stageOne = async (): Promise<void> => {
   await installWhisperCpp({ to: WHISPER_PATH, version: WHISPER_VERSION });
   await downloadWhisperModel({ model: WHISPER_MODEL, folder: WHISPER_PATH });
 
-  // whisper.cpp only accepts 16kHz mono PCM.
-  const wav16 = join(process.cwd(), 'out', `${slug}-16k.wav`);
+  // whisper.cpp only accepts 16kHz mono PCM. This is a working file, so it goes
+  // in qa/ where `npm run clean` will take it — it was previously dropped at
+  // out/ root, where five of them accumulated at ~2.5 MB each.
+  const qa = join(process.cwd(), 'out', slug, 'qa');
+  mkdirSync(qa, { recursive: true });
+  const wav16 = join(qa, `${slug}-16k.wav`);
   execFileSync('ffmpeg', ['-y', '-i', wav, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav16], {
     stdio: 'ignore',
   });

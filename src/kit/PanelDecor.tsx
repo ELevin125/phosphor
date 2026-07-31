@@ -73,7 +73,10 @@ export const PanelDecor: React.FC<{
   const y = Math.floor(random(`${seed}-y`) * 512);
 
   return (
-    <>
+    // `decor` marks this exempt from the layout probe. Decoration is randomised
+    // and may not render at all, so nothing here can be load-bearing — which is
+    // exactly why it must not be measured as though it were.
+    <div data-phosphor="decor">
       <div style={corner('top', 'left')} />
       <div style={corner('top', 'right')} />
       <div style={corner('bottom', 'left')} />
@@ -95,6 +98,6 @@ export const PanelDecor: React.FC<{
       >
         {`x:${x} y:${y}`}
       </span>
-    </>
+    </div>
   );
 };

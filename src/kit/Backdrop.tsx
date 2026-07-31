@@ -98,7 +98,10 @@ export const Backdrop: React.FC<{
   const { backdrop } = theme;
 
   return (
-    <AbsoluteFill style={{ overflow: 'hidden' }}>
+    // Exempt from the layout law: the backdrop is meant to fill the frame edge
+    // to edge, so measuring its starfield against the content box would report
+    // every video as broken. See src/kit/Probe.tsx.
+    <AbsoluteFill data-phosphor="decor" style={{ overflow: 'hidden' }}>
       {backdrop.image ? (
         <AbsoluteFill style={{ overflow: 'hidden' }}>
           <Img

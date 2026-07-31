@@ -295,7 +295,7 @@ const review = (slug: string, verbose: boolean): boolean => {
   const ok = hard === 0;
   console.log(
     `${ok ? '  ok' : '  x '} ${slug.padEnd(20)} ${String(beats.length).padStart(2)} beats  ` +
-      `${totalWords} words  ${total.toFixed(1)}s  variation ${cv.toFixed(2)}`,
+      `${totalWords} words  ${total.toFixed(1)}s  variation ${cv.toFixed(2)}  [${source}]`,
   );
   for (const n of notes) console.log(`       ${n.level}  ${n.text}`);
   return ok;

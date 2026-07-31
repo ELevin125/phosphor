@@ -1,6 +1,6 @@
 import { loadFont as loadMono } from '@remotion/google-fonts/JetBrainsMono';
 import { loadFont as loadUi } from '@remotion/google-fonts/ShareTechMono';
-import type { Theme } from './types';
+import type { ThemeSpec } from './types';
 
 /**
  * Gizmo — the engine debug window, warmed with `cosmic`'s palette.
@@ -25,7 +25,7 @@ import type { Theme } from './types';
  * than drift in. Not `debugview`'s literal one-frame step function, which was
  * a joke about tools rather than something to watch for forty seconds.
  */
-export const gizmo: Theme = {
+export const gizmo: ThemeSpec = {
   name: 'gizmo',
   description: 'Engine debug window. Charcoal and grid, star gold and lilac, mono throughout.',
   shikiTheme: 'vesper',
@@ -104,17 +104,24 @@ export const gizmo: Theme = {
     weightDisplay: 400,
     weightBody: 400,
     weightMono: 400,
-    size: {
+    /*
+      Multiples of the profile's `typeBase`, not pixels — so the same theme
+      works in a 1080x1920 frame and a 1920x1080 one without a second copy.
+
+      The ratios are exactly the px values this theme shipped with, divided by
+      the 40px portrait base, so every existing video renders identically.
+    */
+    scale: {
       // Mono sets wide, so everything sits a step below the sans themes.
-      title: 88,
-      subtitle: 42,
-      heading: 58,
-      body: 40,
-      code: 38,
-      // Up from debugview's 26: `label` is what badge chips use, and a badge
+      title: 2.2,
+      subtitle: 1.05,
+      heading: 1.45,
+      body: 1,
+      code: 0.95,
+      // Up from debugview's 0.65: `label` is what badge chips use, and a badge
       // over footage has to hold its own against the picture behind it.
-      label: 30,
-      caption: 48,
+      label: 0.75,
+      caption: 1.2,
     },
     lineHeight: { tight: 1.12, normal: 1.4, code: 1.6 },
     letterSpacing: { display: '0.01em', body: '0.01em', label: '0.16em' },

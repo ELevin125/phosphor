@@ -249,5 +249,6 @@ if (!DRY) {
 
 console.log(`\n✓ ${slug} is built.`);
 console.log(`  preview:  npm run studio`);
-console.log(`  stills:   ./scripts/contact-sheet.sh ${slug}-<theme>`);
-console.log(`  render:   ./scripts/render.sh ${slug}`);
+console.log(`  check:    npm run check ${slug}          <- run this first`);
+console.log(`  stills:   ./scripts/contact-sheet.sh ${slug}-gizmo`);
+console.log(`  render:   ./scripts/render.sh ${slug}-gizmo --deliver`);

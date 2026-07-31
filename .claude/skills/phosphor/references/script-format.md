@@ -119,7 +119,7 @@ belonged.
 
 ```yaml
 slug: value-vs-reference
-theme: midnight          # the theme this video ships in; registration is automatic
+theme: gizmo             # the theme this video ships in; registration is automatic
 title: Why your struct didn't change
 lang: csharp
 fps: 30
@@ -133,7 +133,7 @@ vo:
 # Optional. Extra compositions from the same timings with a different
 # component, for comparing two layouts frame for frame.
 variants:
-  - id: board            # -> composition `value-vs-reference-board-midnight`
+  - id: board            # -> composition `value-vs-reference-board-gizmo`
     component: VideoBoard
 
 beats:
