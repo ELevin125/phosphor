@@ -186,8 +186,20 @@ if (!existsSync(dir)) {
 }
 
 /*
-  Establish the untouched original exactly once. After this, `raw` is the only
-  thing ever read and `out` is disposable, so settings can be re-tried freely.
+  Establish the untouched original, and re-establish it whenever a new take
+  lands.
+
+  `raw` is the only thing ever read and `out` is disposable, so settings can be
+  re-tried freely. But "adopt once, forever after" is wrong the moment a second
+  take arrives: dropping a new vo.wav next to an old vo.raw.wav meant the next
+  run processed the OLD take straight over the top of the new recording, with no
+  error and nothing to recover it from. That is a take destroyed by running the
+  pipeline, which is the worst thing this script could possibly do.
+
+  A vo.wav newer than vo.raw.wav is therefore taken to be a new recording. The
+  only way to be wrong is a hand-edited vo.wav the user wanted to keep as an
+  output — but vo.wav is documented as disposable and regenerated on every run,
+  so that file was already living on borrowed time.
 */
 if (!existsSync(raw)) {
   if (!existsSync(out)) {
@@ -196,6 +208,19 @@ if (!existsSync(raw)) {
   }
   copyFileSync(out, raw);
   console.log('› first run — kept your recording as vo.raw.wav');
+} else if (existsSync(out) && statSync(out).mtimeMs > statSync(raw).mtimeMs + 1000) {
+  // Local time, not ISO: these sit next to the recordings and get read by a
+  // human deciding which take is which.
+  const when = new Date(statSync(raw).mtimeMs);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const stamp =
+    `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}` +
+    `-${pad(when.getHours())}${pad(when.getMinutes())}`;
+  const keep = join(dir, `vo.raw.${stamp}.wav`);
+  copyFileSync(raw, keep);
+  copyFileSync(out, raw);
+  console.log(`› new take — adopted vo.wav as vo.raw.wav`);
+  console.log(`  previous take kept at ${keep.split('/').pop()}`);
 }
 
 // --- silence trimming --------------------------------------------------------

@@ -92,7 +92,7 @@ const scriptHash = (): string => {
   return sha([(d.beats ?? []).map((b) => [b.id ?? '', b.vo ?? '']), d.corrections]);
 };
 
-type State = { voSettings?: string; voScript?: string };
+type State = { voSettings?: string; voScript?: string; voOutput?: string };
 const state: State = existsSync(statePath)
   ? (JSON.parse(readFileSync(statePath, 'utf8')) as State)
   : {};
@@ -123,16 +123,45 @@ const skip = (label: string, why: string): void => {
 const hasVo = existsSync(rawWav) || existsSync(wav);
 const settingsNow = voHash();
 
+/**
+ * Identity of vo.wav as a string, so a file the pipeline did not write can be
+ * told apart from the one it did.
+ *
+ * mtime alone cannot do this. process-vo READS vo.raw.wav and WRITES vo.wav, so
+ * its own output is always newer than its input — "vo.wav is newer, so it must
+ * be a new recording" is true for a dropped-in take and equally true one second
+ * after a normal run, which would re-process forever.
+ */
+const voStamp = (): string =>
+  existsSync(wav) ? `${Math.round(mtime(wav))}:${statSync(wav).size}` : '';
+
 if (!hasVo) {
   skip('process-vo', 'no recording yet');
 } else {
-  // First run: only vo.wav exists, and process-vo will adopt it as vo.raw.wav.
-  const source = existsSync(rawWav) ? rawWav : wav;
   const settingsChanged = state.voSettings !== undefined && state.voSettings !== settingsNow;
-  const stale = mtime(wav) < mtime(source) || !existsSync(rawWav);
+  /*
+    A vo.wav that does not match the one this pipeline last produced is a new
+    take that has been dropped in, and it has to be processed before anything
+    downstream reads it.
 
-  if (FORCE || stale || settingsChanged) {
-    const why = settingsChanged ? 'vo settings changed' : 'recording is newer';
+    This is not a nicety. The default silence trim cuts about a second, so an
+    unprocessed take is a DIFFERENT LENGTH from the processed one — transcribe
+    first and every caption timestamp is out by the trim, silently, with the
+    error growing toward the front of the video where the dead air was.
+  */
+  const newTake = state.voOutput !== undefined && state.voOutput !== voStamp();
+  // First run under this check: establish the stamp rather than guess.
+  const unknown = state.voOutput === undefined;
+  const stale = !existsSync(rawWav) || mtime(wav) < mtime(rawWav);
+
+  if (FORCE || stale || newTake || settingsChanged || unknown) {
+    const why = settingsChanged
+      ? 'vo settings changed'
+      : newTake
+        ? 'new take dropped in'
+        : unknown
+          ? 'no record of the last run'
+          : 'recording is newer';
     console.log(`  (${FORCE ? 'forced' : why})`);
     run('process-vo', 'process-vo.ts', [slug]);
   } else {
@@ -143,16 +172,37 @@ if (!hasVo) {
 // -------------------------------------------------------------------- retime
 
 const scriptNow = scriptHash();
+const review = join(projectDir, 'transcript.md');
 
+/*
+  Retime is two stages with a human in the middle, so the build stops rather
+  than runs through.
+
+  The caption text is the transcript, burned into the finished video, and the
+  mistakes whisper makes are function words a bigger model cannot fix. Stage one
+  writes transcript.md and halts; stage two accepts it. A build that transcribed
+  and carried straight on would put words nobody checked on screen, which is the
+  failure this gate exists to catch.
+*/
 if (!existsSync(wav)) {
   skip('retime', 'no vo.wav to transcribe');
 } else {
   const scriptChanged = state.voScript !== undefined && state.voScript !== scriptNow;
-  if (FORCE || mtime(captions) < mtime(wav) || scriptChanged) {
+  const needsTranscribe = FORCE || mtime(review) < mtime(wav) || scriptChanged;
+
+  if (needsTranscribe) {
     if (scriptChanged) {
       console.log('  (narration changed)');
     }
-    run('retime', 'retime.ts', [slug]);
+    run('transcribe', 'retime.ts', [slug, ...(FORCE ? ['--force'] : [])]);
+    if (!DRY) {
+      console.log('\n⏸  Build paused for transcript review.');
+      console.log('   Check the words above, fix any that are wrong in');
+      console.log(`   projects/${slug}/transcript.md, then run this again.`);
+      process.exit(0);
+    }
+  } else if (mtime(captions) < mtime(review)) {
+    run('retime --apply', 'retime.ts', [slug, '--apply']);
   } else {
     skip('retime', 'captions are up to date');
   }
@@ -189,7 +239,11 @@ if (!DRY) {
   // changed again.
   writeFileSync(
     statePath,
-    JSON.stringify({ voSettings: settingsNow, voScript: scriptHash() }, null, 2),
+    JSON.stringify(
+      { voSettings: settingsNow, voScript: scriptHash(), voOutput: voStamp() },
+      null,
+      2,
+    ),
   );
 }
 
