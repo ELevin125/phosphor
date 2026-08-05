@@ -5,7 +5,7 @@ description: Plan, script and animate short-form programming explainer videos (I
 
 # Phosphor — programming explainers
 
-Vertical 1080x1920 @ 30fps. Two kinds: **explainers** (35-50s, usually
+Vertical 1080x1920 @ 30fps. Two kinds: **explainers** (40-50s, usually
 narrated) and **showcases** (footage with a label, as long as the clip). The
 user records any voiceover themselves, so the script is a deliverable, not an
 internal artifact.
@@ -46,7 +46,7 @@ clip that just wanted a label on it.
 | purpose | teach a concept | show something off |
 | structure | hook → build → payoff | one held idea |
 | text | narration or per-beat lines | often a single static label |
-| runtime | 35-50s narrated, 18-40s silent | as long as the footage |
+| runtime | 40-50s narrated, 18-40s silent | as long as the footage |
 | research | misconceptions, where people get stuck | none |
 | `beats.yaml` | `type: educational` (default) | `type: showcase` |
 
@@ -132,11 +132,13 @@ Practical rules for scenes:
    3.1 w/s is measured, not assumed: 679 words over 216.9s of finished audio
    across the three recorded videos (3.05, 2.96, 3.40). This figure was 2.6
    until it was checked, which over-estimated every beat by about 20%.
-6. Total runtime **35-50 seconds**. Silent explainers target 18-40s; showcases
-   have no target. Note that every educational video actually shipped runs
-   68-75s, so this range describes an intention rather than the practice — if
-   the longer cut is the one you want, change the range rather than quietly
-   overrunning it every time.
+6. Total runtime **40-50 seconds**. Silent explainers target 18-40s; showcases
+   have no target. Every educational video shipped before 2026-08-05 runs
+   68-75s, because the rate above was wrong by 20% and nobody re-checked. The
+   measured uploads say the target was right and the practice was wrong: reach
+   is scored on the *fraction* of the video watched, so a 73s cut takes a ~40%
+   penalty before anything else is considered. Cut a beat — three ideas is the
+   ceiling for a short, and a fourth is a sequel. See `docs/RETENTION.md`.
 
 For a **showcase**, `script.md` is just: a layout sketch, the exact on-screen
 text, and an explicit list of what is deliberately NOT in the video. Do not
@@ -359,7 +361,7 @@ solve a one-video design problem.
 5. **Never guess the Remotion API.** Check `references/remotion-api.md`; if it
    isn't there, read the `.d.ts` in `node_modules` and then add it to the
    reference.
-6. Runtime follows the video type — see the Phase 0 table. 35-50s narrated,
+6. Runtime follows the video type — see the Phase 0 table. 40-50s narrated,
    18-40s silent explainer, no target for a showcase.
 7. **Establish the video type before writing the script**, and never invent
    explanatory structure the user did not ask for.

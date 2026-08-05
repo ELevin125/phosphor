@@ -2,6 +2,7 @@
   "name": "phosphor",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Programmatic short-form programming explainers (1080x1920, 30fps) built with Remotion.",
   "scripts": {
     "new": "tsx scripts/new.ts",
@@ -26,7 +27,8 @@
     "precheck": "npm run sync",
     "clean": "tsx scripts/clean.ts",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "srt": "tsx scripts/srt.ts"
   },
   "dependencies": {
     "@remotion/captions": "4.0.499",

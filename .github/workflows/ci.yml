@@ -1,0 +1,36 @@
+# The checks that already existed and only ran when somebody remembered.
+#
+# Deliberately only the three that need nothing but the tracked tree. `check`
+# and `script` both read projects/, which is gitignored user data — on a clean
+# checkout there is nothing for them to look at, so running them here would
+# report "no projects" and pass, which is worse than not running them.
+#
+# The generated registry and music manifest are produced by the `pretypecheck`
+# hook. Both generators handle their source directory being absent, which is
+# exactly the case here.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the version vendored in .tooling/ for local runs.
+          node-version: '22.23.1'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run test
+
+      - run: npm run typecheck

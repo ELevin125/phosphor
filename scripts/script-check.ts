@@ -1,8 +1,9 @@
 /**
  * Script self-review — the measurable half.
  *
- *   npm run script                  # every script.md
- *   npm run script second-listener  # one, with the beat table
+ *   npm run script                  # every active project
+ *   npm run script second-listener  # one, with the beat table (archived or not)
+ *   npm run script --all            # including archived ones
  *
  * Phase 1 ends with a script being shown for approval, and approval is the one
  * gate in this pipeline that cannot be re-run cheaply — everything downstream
@@ -12,7 +13,10 @@
  * This deliberately checks nothing about whether the script is any good. It
  * checks the things that are wrong in a way arithmetic can see: durations that
  * do not match their word counts, a runtime outside the target, sections
- * missing, narration that drifted between the table and the clean block. The
+ * missing, narration that drifted between the table and the clean block, and
+ * the four rules in docs/RETENTION.md that survive contact with a regex — the
+ * runtime ceiling, hook length, a sequel reference in beat 1, and whether any
+ * beat boundary falls where a second loop would have to open. The
  * judgement half lives in SKILL.md Phase 1.5 and is written prose, because
  * "does this have a turn in it" is not something a regex gets to rule on.
  *
@@ -43,9 +47,43 @@ const WPS = 3.1;
 const WPS_MIN = 2.7;
 const WPS_MAX = 3.6;
 
-/** Target runtime for an educational short. */
-const RUNTIME_MIN = 35;
+/** Target runtime for an educational short. See docs/RETENTION.md#1. */
+const RUNTIME_MIN = 40;
 const RUNTIME_MAX = 50;
+
+/**
+ * Words in beat 1 before the hook stops being a premise and becomes a preamble.
+ *
+ * The best-performing hook shipped is flow-field's, at 21 words / 6.6s: a goal,
+ * an actor, an obstacle, and a precisely shaped hole. Past roughly this the
+ * setup is still arriving when the drop-off cliff does. See RETENTION.md#5.
+ */
+const HOOK_MAX_WORDS = 24;
+
+/**
+ * Temporal callbacks in beat 1.
+ *
+ * ~95% of a Reels audience is cold, so a sentence referring to a previous video
+ * reads as *you missed something, this isn't for you*. It cost `every-frame` a
+ * video whose body outperformed flow-field's. Restating the same fact without
+ * the callback costs nothing. See RETENTION.md#4.
+ *
+ * Deliberately only the unambiguous temporal forms — "we built" is flagged by
+ * nothing here, because "so we built a grid" is a perfectly good cold opening.
+ */
+const SEQUEL_REFERENCES =
+  /\b(last time|previously|last video|the last (?:video|one)|if you (?:saw|watched)|remember when|carrying on from|part (?:one|two|three|\d))\b/i;
+
+/**
+ * Where a second loop has to be able to open. See RETENTION.md#7.
+ *
+ * Checked as "is there a beat boundary in this window" — which is a proxy, not
+ * a reading. Nothing mechanical can tell whether a beat opens a new question or
+ * continues an old one; what it CAN tell you is that with no boundary in the
+ * window, nothing opens there at all.
+ */
+const SECOND_LOOP_MIN = 25;
+const SECOND_LOOP_MAX = 30;
 
 /**
  * Above this, uniform beat lengths start to read as generated rather than cut.
@@ -129,6 +167,34 @@ const parseBeats = (md: string): Beat[] => {
   }
   return out;
 };
+
+/**
+ * Whether a project has been retired from the sweep — `archived: true` at the
+ * top level of its beats.yaml.
+ *
+ * Shipped videos stay in the tree because they are the reference material: the
+ * only worked examples of the format that exist. What they are not is code to
+ * maintain. Every one of them was scripted against the old 2.6 w/s figure, so
+ * every beat of every one of them trips the rate check — about forty warnings
+ * that will never be actioned, burying the handful that would be.
+ *
+ * Archiving hides them from a sweep and nothing else. Naming one explicitly
+ * still checks it, and `--all` still sweeps everything, because referring back
+ * to them is the entire reason they are kept.
+ */
+type Meta = { readonly archived: boolean; readonly profile: string };
+
+const meta = (slug: string): Meta => {
+  const path = join(PROJECTS, slug, 'beats.yaml');
+  if (!existsSync(path)) return { archived: false, profile: 'portrait' };
+  const doc = parse(readFileSync(path, 'utf8')) as {
+    archived?: boolean;
+    profile?: string;
+  } | null;
+  return { archived: doc?.archived === true, profile: doc?.profile ?? 'portrait' };
+};
+
+const isArchived = (slug: string): boolean => meta(slug).archived;
 
 /** The same beats, read from beats.yaml when script.md defers to it. */
 const parseBeatsYaml = (dir: string): Beat[] => {
@@ -228,15 +294,67 @@ const review = (slug: string, verbose: boolean): boolean => {
   }
 
   /*
-    Soft, not hard. SKILL.md states a 35-50s target and every educational video
-    actually shipped runs 68-75s, so a failure here is at least as likely to
-    mean the target is stale as that the script is long. Flagged so the
-    discrepancy stays visible rather than being quietly normalised either way.
+    This comment used to say a failure here was "at least as likely to mean the
+    target is stale as that the script is long". The measured uploads settled
+    it the other way: the target was right and the practice was wrong. Reach is
+    scored on the fraction of the video watched, so runtime is a denominator
+    and a 73s cut takes a ~40% penalty before anything else is considered.
+
+    Still soft rather than hard: a script can be knowingly long on its way to
+    being cut, and this is read before a human hands it over, not by a gate.
+    A short that trips it wants a beat removed, not every beat shaved.
+
+    None of the short-form rules below apply to long-form, which is landscape,
+    runs to five minutes by design, and is scored by nothing in RETENTION.md —
+    that document is about a feed. The profile is the discriminator rather than
+    the runtime, so a 95s portrait script is still told it is 95s long.
   */
-  if (total < RUNTIME_MIN || total > RUNTIME_MAX) {
+  const short = meta(slug).profile !== 'landscape';
+  if (short && (total < RUNTIME_MIN || total > RUNTIME_MAX)) {
+    const over = total > RUNTIME_MAX;
     notes.push({
       level: '!',
-      text: `runtime ${total.toFixed(1)}s is outside the ${RUNTIME_MIN}-${RUNTIME_MAX}s target in SKILL.md`,
+      text:
+        `runtime ${total.toFixed(1)}s is outside the ${RUNTIME_MIN}-${RUNTIME_MAX}s target` +
+        (over
+          ? ` — that is ${(RUNTIME_MAX / total * 100).toFixed(0)}% of the reach a ${RUNTIME_MAX}s cut would score. Cut a beat (RETENTION.md#1)`
+          : ''),
+    });
+  }
+
+  /*
+    The retention rules that arithmetic can see. The rest of RETENTION.md — the
+    first-frame onset law, the physical event on the drop-off cliff — is about
+    what is on screen, so it belongs to `check.ts` or to a human, not here.
+  */
+  const first = beats[0];
+  if (short && first) {
+    if (first.words > HOOK_MAX_WORDS) {
+      notes.push({
+        level: '!',
+        text: `hook is ${first.words} words (~${(first.words / WPS).toFixed(1)}s) — over ${HOOK_MAX_WORDS} the setup is still arriving at the drop-off (RETENTION.md#5)`,
+      });
+    }
+    const sequel = SEQUEL_REFERENCES.exec(first.narration);
+    if (sequel) {
+      notes.push({
+        level: 'x',
+        text: `hook says "${sequel[0]}" — a cold audience hears "this isn't for you". State it as a fact, not a callback (RETENTION.md#4)`,
+      });
+    }
+  }
+
+  // Cumulative start time of each beat after the first, so "is there a boundary
+  // in the window" is just a lookup.
+  let elapsed = 0;
+  const boundaries = beats.slice(0, -1).map((b) => (elapsed += b.dur));
+  const opensSecondLoop = boundaries.some(
+    (t) => t >= SECOND_LOOP_MIN && t <= SECOND_LOOP_MAX,
+  );
+  if (short && total > SECOND_LOOP_MAX && !opensSecondLoop) {
+    notes.push({
+      level: '!',
+      text: `no beat starts between ${SECOND_LOOP_MIN}s and ${SECOND_LOOP_MAX}s — nothing can open a second loop there (RETENTION.md#7)`,
     });
   }
 
@@ -301,18 +419,27 @@ const review = (slug: string, verbose: boolean): boolean => {
   return ok;
 };
 
-const arg = process.argv[2];
-const slugs = arg
-  ? [arg]
-  : readdirSync(PROJECTS, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-      .sort();
+const argv = process.argv.slice(2);
+const ALL = argv.includes('--all');
+const arg = argv.find((a) => !a.startsWith('--'));
+
+const everything = (): string[] =>
+  readdirSync(PROJECTS, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+
+// An explicitly named project is always reviewed, archived or not.
+const slugs = arg ? [arg] : everything().filter((s) => ALL || !isArchived(s));
+const hidden = arg || ALL ? 0 : everything().length - slugs.length;
 
 console.log('script:');
 let allOk = true;
 for (const slug of slugs) {
   if (!review(slug, Boolean(arg))) allOk = false;
+}
+if (hidden > 0) {
+  console.log(`\n  ${hidden} archived project${hidden === 1 ? '' : 's'} skipped — --all to include them.`);
 }
 if (!allOk) {
   console.log('\n  x marks something to fix before showing the script.');

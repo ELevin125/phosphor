@@ -39,7 +39,14 @@
  * platform squashing the result.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, renameSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
@@ -49,7 +56,7 @@ if (!slug || slug.startsWith('--')) {
     'usage: npm run process-vo <slug> ' +
       '[--bass 0] [--mid 0] [--midf 900] [--highs -2.5] [--deess 0.35]\n' +
       '                              [--hpf 80] [--lufs -16] [--pad 0.3] [--trim 0.7]\n' +
-      '                              [--denoise] [--dry]',
+      '                              [--denoise] [--dry] [--adopt] [--reprocess]',
   );
   process.exit(1);
 }
@@ -89,7 +96,9 @@ const cfg = loadVoConfig();
 function suggestPersist(): void {
   const passed = args
     .map((a, i) => ({ a, next: args[i + 1] }))
-    .filter(({ a }) => a.startsWith('--') && a !== '--dry')
+    // Actions, not settings. `--reprocess: true` in a beats.yaml would be
+    // meaningless at best and would re-adopt on every run at worst.
+    .filter(({ a }) => a.startsWith('--') && !['--dry', '--adopt', '--reprocess'].includes(a))
     .map(({ a, next }) => {
       const name = a.slice(2);
       const numeric = next !== undefined && !next.startsWith('--') && Number.isFinite(Number(next));
@@ -175,6 +184,10 @@ const HPF = flag('hpf', 80);
 const DENOISE = args.includes('--denoise') || cfg.denoise === true;
 /** CLI-only: an action, not a setting, so it has no place in beats.yaml. */
 const DRY = args.includes('--dry');
+/** vo.wav is a NEW RECORDING: archive the current raw and adopt it. */
+const ADOPT = args.includes('--adopt');
+/** vo.wav is old OUTPUT: discard it and rebuild from vo.raw.wav. */
+const REPROCESS = args.includes('--reprocess');
 
 const dir = join(process.cwd(), 'public', 'videos', slug);
 const raw = join(dir, 'vo.raw.wav');
@@ -190,25 +203,45 @@ if (!existsSync(dir)) {
   lands.
 
   `raw` is the only thing ever read and `out` is disposable, so settings can be
-  re-tried freely. But "adopt once, forever after" is wrong the moment a second
-  take arrives: dropping a new vo.wav next to an old vo.raw.wav meant the next
-  run processed the OLD take straight over the top of the new recording, with no
-  error and nothing to recover it from. That is a take destroyed by running the
-  pipeline, which is the worst thing this script could possibly do.
+  re-tried freely. Two things can go wrong and they pull in opposite directions:
 
-  A vo.wav newer than vo.raw.wav is therefore taken to be a new recording. The
-  only way to be wrong is a hand-edited vo.wav the user wanted to keep as an
-  output — but vo.wav is documented as disposable and regenerated on every run,
-  so that file was already living on borrowed time.
+    - Process the OLD take over the top of a newly dropped-in vo.wav, and a
+      recording is destroyed with no error and nothing to recover it from.
+    - Adopt our OWN output as the raw, and the "original" becomes a processed
+      file — every later run then compresses and normalises an already
+      compressed and normalised take, and the true original is gone.
+
+  This used to test `out` newer than `raw`, which cannot tell them apart: this
+  script READS raw and WRITES out, so out is always newer after a normal run.
+  The 1-second tolerance was far short of the time it takes to encode a
+  100-second file, so the second run on any project adopted its own output. It
+  went unnoticed only because build.ts tracks a content stamp and normally
+  prevents a second run — until a project turned up without a state file, and
+  then this fired and cost a real recording (recovered from the archive copy).
+
+  So identity, not mtime, and when identity is unknown this REFUSES rather than
+  guessing. A wrong guess is unrecoverable in one direction; a prompt costs a
+  couple of seconds.
 */
-if (!existsSync(raw)) {
-  if (!existsSync(out)) {
-    console.error(`No vo.raw.wav or vo.wav in ${dir}.`);
-    process.exit(1);
+const stateFile = join(dir, '.vo-state.json');
+
+/** Identity of a file as content-ish: size plus mtime. Same idea as build.ts. */
+const stampOf = (p: string): string =>
+  existsSync(p) ? `${Math.round(statSync(p).mtimeMs)}:${statSync(p).size}` : '';
+
+const readState = (): { output?: string } => {
+  if (!existsSync(stateFile)) {
+    return {};
   }
-  copyFileSync(out, raw);
-  console.log('› first run — kept your recording as vo.raw.wav');
-} else if (existsSync(out) && statSync(out).mtimeMs > statSync(raw).mtimeMs + 1000) {
+  try {
+    return JSON.parse(readFileSync(stateFile, 'utf8')) as { output?: string };
+  } catch {
+    return {};
+  }
+};
+
+/** Archives the current raw before anything replaces it. */
+const archiveRaw = (): string => {
   // Local time, not ISO: these sit next to the recordings and get read by a
   // human deciding which take is which.
   const when = new Date(statSync(raw).mtimeMs);
@@ -218,9 +251,41 @@ if (!existsSync(raw)) {
     `-${pad(when.getHours())}${pad(when.getMinutes())}`;
   const keep = join(dir, `vo.raw.${stamp}.wav`);
   copyFileSync(raw, keep);
+  return keep.split('/').pop() ?? keep;
+};
+
+if (!existsSync(raw)) {
+  if (!existsSync(out)) {
+    console.error(`No vo.raw.wav or vo.wav in ${dir}.`);
+    process.exit(1);
+  }
   copyFileSync(out, raw);
-  console.log(`› new take — adopted vo.wav as vo.raw.wav`);
-  console.log(`  previous take kept at ${keep.split('/').pop()}`);
+  console.log('› first run — kept your recording as vo.raw.wav');
+} else if (existsSync(out)) {
+  const recorded = readState().output;
+  const now = stampOf(out);
+
+  if (recorded === now) {
+    // vo.wav is exactly what this script last produced. Nothing to adopt.
+  } else if (ADOPT || (recorded !== undefined && recorded !== now)) {
+    const kept = archiveRaw();
+    copyFileSync(out, raw);
+    console.log('› new take — adopted vo.wav as vo.raw.wav');
+    console.log(`  previous take kept at ${kept}`);
+  } else if (!REPROCESS) {
+    console.error(
+      `Cannot tell what vo.wav is in ${dir}.\n\n` +
+        `There is no record of this script producing it, so it is either a new\n` +
+        `take you dropped in, or output from before this check existed.\n` +
+        `Guessing wrong either destroys a recording or corrupts the original,\n` +
+        `so pick one:\n\n` +
+        `  npm run process-vo ${slug} -- --adopt\n` +
+        `      vo.wav is a NEW RECORDING. Archive the current raw and adopt it.\n\n` +
+        `  npm run process-vo ${slug} -- --reprocess\n` +
+        `      vo.wav is old OUTPUT. Discard it and rebuild from vo.raw.wav.\n`,
+    );
+    process.exit(1);
+  }
 }
 
 // --- silence trimming --------------------------------------------------------
@@ -591,6 +656,13 @@ if (drift > 1) {
       `usually means the recording is very quiet or heavily clipped.`,
   );
 }
+
+/*
+  Record what we just produced, so the next run can tell this file apart from a
+  take dropped in by hand. Without it the only signal is mtime, which is always
+  "output is newer" and cost a recording once already.
+*/
+writeFileSync(stateFile, JSON.stringify({ output: stampOf(out) }, null, 2));
 
 console.log(`\n✓ ${out} (${(statSync(out).size / 1e6).toFixed(1)} MB)`);
 console.log('  original untouched at vo.raw.wav — re-run with different flags any time.');

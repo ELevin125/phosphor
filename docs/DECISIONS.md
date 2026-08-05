@@ -249,3 +249,125 @@ session had to read past.
   for no functional gain. They are marked instead, and not to be extended.
 - The saving comes from tiering the *export surface and the reference doc*, so a
   session reads the tier it needs rather than all forty exports.
+
+---
+
+## D012 — Provenance is tracked by content identity, never by mtime
+
+**2026-08-01** · active
+
+`process-vo` records the identity (`mtime:size`) of the `vo.wav` it wrote, in
+`public/videos/<slug>/.vo-state.json`. When it cannot tell what a `vo.wav` is,
+it **refuses and asks** (`--adopt` / `--reprocess`) rather than guessing.
+`build.ts` no longer runs `process-vo` merely because it has no state file.
+
+**Why:** the previous rule was "a `vo.wav` newer than `vo.raw.wav` is a new
+take". That is unsound, because this script READS the raw and WRITES the output
+— so the output is *always* newer after a normal run, and the 1-second tolerance
+was far short of the time it takes to encode 100 seconds of audio.
+
+It went unnoticed because `build.ts` tracks a content stamp and normally
+prevents a second consecutive run. Then a project turned up with no
+`.build-state.json`; `build.ts` ran `process-vo` "to establish the stamp";
+`process-vo` had nothing to compare against either, and **adopted its own
+processed output as the untouched original**. Two scripts guessing at once, and
+the one unrecoverable action in the pipeline taken automatically.
+
+Damage was contained — the archive copy (`vo.raw.<stamp>.wav`) held the true
+106.1s original, and reprocessing from it reproduced `vo.wav` to the same
+98.648s and every beat duration to `+0.00`. Nothing was lost. It was luck that
+the archive existed, not design.
+
+**Consequences:**
+- Unrecoverable actions are never taken on a guess. Asking costs seconds; a
+  destroyed take costs a recording session.
+- Where two components can each infer the same fact, exactly one owns it.
+- **Known rough edge:** reprocessing audio without re-recording moves `vo.wav`'s
+  mtime past `transcript.md`, so the build wants to re-transcribe even though
+  the content is unchanged. The real fix is to stamp the transcript with the
+  audio identity it was made from, the same way everything else here now works.
+  Until then the workaround is `touch transcript.md`.
+
+---
+
+## D013 — A caption may be awkward. It may never be false. {#d013}
+
+**2026-08-01.** The phrase grouper prices a break that would strand a negation
+(`not`, `n't`, `never`, `cannot`, …) at 44, three times the cost of an ordinary
+stranded function word, and prices a break *before* one at 3, below a plain
+break. Negations lead their own scope.
+
+**Why:** `second-listener` shipped with a caption reading "a very good
+solution," held alone for a second and a half over the naive code, while the
+voice said "this is **not** a very good solution." On Shorts and Reels most
+viewing is muted, so for most of the audience the video asserted the opposite of
+its own argument at the moment it was making it.
+
+Every other rule in `phrases.ts` is about a caption looking broken. This one is
+about a caption *being wrong*, and the two do not belong in the same cost tier —
+`not` had been priced at 14 alongside `the` and `of`, which was not remotely
+enough to outbid the flat-bottomed length cost.
+
+**Consequences:**
+- Pinned by `src/kit/captions/phrases.test.ts`. Caption rules are correctness,
+  not taste, and get tests like any other correctness rule.
+- Forbidding the bad break is only half of it — the good break has to be made
+  cheap, or the grouper just finds a different bad one ("Now this is not a").
+
+---
+
+## D014 — A beat boundary is not a free break. {#d014}
+
+**2026-08-01.** `breakCost` returns 6 rather than 0 when there is no next word,
+and `unstrandConnectives` pushes a trailing `and` / `but` / `so` / `when` across
+a beat split into the beat it opens.
+
+**Why:** the old comment read "the break is already forced, so it is free." The
+break is forced; where the phrase *before* it starts is not, and charging
+nothing meant the grouper could not tell a segment ending on a full stop from
+one ending on "and". Six of seven beats in `second-listener` ended on a stranded
+conjunction.
+
+`snapToSentences` already handled the case where the boundary sits a word away
+from a full stop. It cannot help when the read runs on and there is no full stop
+within reach, which is exactly what an improvised take produces. The grouper
+cannot help either — a word can only be grouped inside the segment it was given
+— so the repair has to happen at the split.
+
+**Consequences:**
+- Both passes only ever move a split across words already spoken adjacently, so
+  no timing is invented; a word changes which caption it belongs to, never when
+  it appears.
+- `snapToSentences` wins where they disagree: a split already on a full stop is
+  correct and is left alone.
+
+---
+
+## D015 — An arrow ends where the arrow ends. {#d015}
+
+**2026-08-01.** `Graph` draws an edge as **two** line segments with the
+arrowhead's own footprint removed from between them, rather than as one full
+line with a head laid on top.
+
+**Why:** the head was a triangle centred on a point 93% along a shaft drawn to
+100%, so seven percent of line plus half a head-length protruded through the
+point of every arrow in every diagram. It reads as a rendering fault, and it was
+in all of them.
+
+The obvious repair — trim the shaft at the end the head points to — is wrong
+here, because the head does not stay at an end. It slides the whole length of
+the wire during a reversal, which is the best two seconds in `second-listener`.
+Trim the far end to a head sitting halfway along and the wire visibly retracts
+from the box it is pointing at: a worse artefact than the overshoot, and it was
+rendered and caught before it went anywhere.
+
+Cutting out only what the head covers is correct at every position the head can
+occupy. At an end, one segment is empty and the other stops at the head's base.
+Halfway, both exist and meet where the head is, so the wire stays continuous —
+which it must, because mid-turn the head is edge-on and there is nothing there
+to hide behind.
+
+**Consequences:**
+- `npm run check` cannot see this class of defect and correctly reported the
+  video clean throughout. Geometry validation is not a substitute for looking at
+  frames.

@@ -56,6 +56,19 @@ type ProfileInput = {
    * not change between them. See docs/DECISIONS.md#d010.
    */
   readonly typeBase: number;
+  /**
+   * Whether videos in this frame burn captions in by default.
+   *
+   * Portrait does: Reels and Shorts are watched muted, and the band is the
+   * whole reason the content box stops where it does. Landscape does not —
+   * long-form is watched with sound, YouTube renders its own subtitles from the
+   * SRT sidecar (`npm run srt`), and a burned-in band would cost 136px of a
+   * frame that is already 44% shorter.
+   *
+   * This is a DEFAULT, not a prohibition. The band geometry stays defined for
+   * both, so a landscape video can still opt in with `showCaptions`.
+   */
+  readonly usesCaptions: boolean;
 };
 
 export type Layout = {
@@ -74,7 +87,13 @@ export type Layout = {
   readonly captionMaxChars: number;
   /** Body-text size in px, which the theme's ratios are resolved against. */
   readonly typeBase: number;
-  /** The only rectangle a video's visuals may occupy. */
+  /** Default for `Stage`'s `showCaptions`. See the note on ProfileInput. */
+  readonly usesCaptions: boolean;
+  /**
+   * The only rectangle a video's visuals may occupy, WITH the caption band
+   * reserved. When captions are off the box extends over the band — call
+   * `useContentBox()`, which accounts for that, rather than reading this.
+   */
   readonly content: {
     readonly top: number;
     readonly bottom: number;
@@ -103,6 +122,7 @@ const derive = (name: ProfileName, i: ProfileInput): Layout => {
     captionBandBottom: captionBandTop + i.captionHeight,
     captionMaxChars: i.captionMaxChars,
     typeBase: i.typeBase,
+    usesCaptions: i.usesCaptions,
     content: {
       ...content,
       width: content.right - content.left,
@@ -133,6 +153,7 @@ export const PROFILES: Record<ProfileName, Layout> = {
     captionMaxChars: 52,
     // 40px is what every shipped short was authored and reviewed at.
     typeBase: 40,
+    usesCaptions: true,
   }),
 
   /*
@@ -170,6 +191,9 @@ export const PROFILES: Record<ProfileName, Layout> = {
       number to check against the pilot. See docs/STATUS.md.
     */
     typeBase: 32,
+    // Long-form ships an SRT sidecar instead — see docs/FORMAT.md. Switching
+    // this off returns the band to the content box: 936px tall, not 800.
+    usesCaptions: false,
   }),
 };
 

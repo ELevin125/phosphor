@@ -1,6 +1,6 @@
 # Phosphor docs
 
-Four documents. If you are an agent picking this project up cold, read them in
+Five documents. If you are an agent picking this project up cold, read them in
 this order — between them they should answer "what is this, how is it built,
 why is it built that way, and what is happening right now" without you needing
 to read the source first.
@@ -8,6 +8,7 @@ to read the source first.
 | doc | answers | changes |
 |---|---|---|
 | [FORMAT.md](FORMAT.md) | What a Phosphor video *is*. Editorial doctrine, video types, the rules a video must satisfy. | rarely |
+| [RETENTION.md](RETENTION.md) | What makes one get *watched*. Measured upload data, hook rules, the pre-record checklist. | when a video is measured |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the system is built. Layers, pipeline, data flow, where things live. | with the code |
 | [DECISIONS.md](DECISIONS.md) | Why it is built that way. Append-only log with the reasoning and what each decision cost. | append-only |
 | [STATUS.md](STATUS.md) | Where we are. What is done, what is in flight, what is next, what is known-broken. | constantly |

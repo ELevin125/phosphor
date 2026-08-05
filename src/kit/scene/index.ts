@@ -7,6 +7,7 @@ export {
   useSpaceOrNull,
   SceneInset,
   SceneHeight,
+  SceneWidth,
   type SceneProps,
 } from './Scene';
 export { makeSpace, type Vec2, type World, type Space } from './space';

@@ -24,7 +24,12 @@ gimbal lock, frame-rate-dependent lerp, flow fields, delta time.
 
 Topics that suit this format have **behaviour you can point at**: motion, state
 over time, a spatial relationship, a before/after. Topics that are genuinely a
-list of API names do not, and should not be forced into it.
+list of API names do not, and should not be forced into it. Nor do architecture
+opinions — `second-listener` is the proof, and RETENTION.md#6 is the post-mortem.
+
+A topic also needs a **foothold**: the problem statement has to land on someone
+who has never opened the engine. This is a separate filter from the one above
+and it caps the audience before a frame plays.
 
 ## The two formats
 
@@ -42,6 +47,11 @@ list of API names do not, and should not be forced into it.
 The short-form runtime figure is worth reading twice: every educational short
 actually shipped runs 68–75s against a stated 35–50s target. The target
 describes an intention, not the practice.
+
+Measured uploads say the practice is wrong and the target was right — reach is
+scored on the *fraction* of the video watched, so a 73s runtime is a ~40%
+penalty applied before anything else. See [RETENTION.md](RETENTION.md), which
+carries the data, the hook rules and the pre-record checklist.
 
 ### Showcases
 

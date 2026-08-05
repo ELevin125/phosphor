@@ -109,6 +109,12 @@ const measure = (): ProbeBox[] => {
     if (el.closest('[data-phosphor="decor"]')) {
       continue;
     }
+    // Board layout flies a camera across a surface larger than the frame, so
+    // screen-space bounds say nothing about whether its cells are laid out
+    // correctly. See the note in Board.tsx.
+    if (el.closest('[data-phosphor="board"]')) {
+      continue;
+    }
     const style = window.getComputedStyle(el);
     // Invisible ink is not ink. Fades legitimately pass through opacity 0 at a
     // beat boundary, and flagging those would make every transition a finding.

@@ -58,11 +58,25 @@ export const SceneInset = createContext<{ readonly bottom: number }>({ bottom: 0
  */
 export const SceneHeight = createContext<number | null>(null);
 
+/**
+ * The same, for width.
+ *
+ * Missing until landscape arrived, and its absence was not a bug in portrait —
+ * a 1080-wide frame has no spare horizontal room to subdivide, so every layout
+ * was a column and the scene always wanted the full width. A 1920-wide frame's
+ * defining affordance is exactly the opposite: two things side by side, which
+ * is the one arrangement portrait cannot do at all.
+ *
+ * Overrides rather than adjusts, for the same reason as `SceneHeight`.
+ */
+export const SceneWidth = createContext<number | null>(null);
+
 export const Scene: React.FC<SceneProps> = ({ world, children }) => {
   const { bottom: inset } = useContext(SceneInset);
   const fixed = useContext(SceneHeight);
+  const fixedWidth = useContext(SceneWidth);
   const box = useContentBox();
-  const width = box.width;
+  const width = fixedWidth ?? box.width;
   const height = fixed ?? box.height - inset;
   const space = makeSpace(world, width, height);
 

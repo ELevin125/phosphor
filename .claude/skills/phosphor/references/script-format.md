@@ -108,9 +108,14 @@ belonged.
 
 ## Timing
 
-- **~2.6 words/sec** is the estimate for the rough cut.
-- Total runtime is **hard-capped at 35-50 seconds**. Outside that range,
-  `build-beats` prints a warning — cut a beat rather than shave every beat.
+- **3.1 words/sec** turns a word count into a duration. Measured, not assumed:
+  679 words over 216.9s of finished audio across the recorded videos. It was
+  2.6 here until 2026-08-05, which over-estimated every beat by about 20% and
+  is the direct cause of every shipped short running 68-75s.
+- Total runtime is **hard-capped at 40-50 seconds**. Outside that range,
+  `npm run script` flags it — cut a beat rather than shave every beat. The
+  ceiling is not taste: reach is scored on the fraction of the video watched,
+  so runtime is a denominator. See `docs/RETENTION.md`.
 - A beat should be one idea. If a beat's `vo` needs a semicolon, it's two beats.
 - Beats under ~2.5s feel clipped; beats over ~7s need visual movement inside
   them or they read as a freeze.
@@ -136,6 +141,10 @@ variants:
   - id: board            # -> composition `value-vs-reference-board-gizmo`
     component: VideoBoard
 
+# Optional. Retires a shipped video from the `npm run script` sweep. It still
+# renders, still registers, and is still reviewed when named explicitly.
+archived: true
+
 beats:
   - id: hook               # matches <Beat id="hook">, must be unique
     duration: 4.3          # SECONDS. Regenerate with: npm run build-beats
@@ -155,6 +164,12 @@ beats:
 
 - `theme` names one of the themes in `src/theme/`. Nothing else registers the
   video — `npm run sync` reads this.
+- `archived: true` once a video has shipped and is no longer being worked on.
+  Shipped videos are the reference material and stay in the tree, but they are
+  not code to maintain — every one made before 2026-08-05 was scripted at the
+  wrong words-per-second figure and trips the rate check on every beat. Archiving
+  keeps that noise out of a sweep. `npm run script <slug>` and `--all` both still
+  see them.
 
 Regenerate after every edit:
 ```bash

@@ -118,6 +118,12 @@ export type StageProps = {
    * Burned-in captions come from narration. A silent, text-only video has no
    * narration to caption, so the band is switched off and the beats get the
    * full content box.
+   *
+   * Defaults from the PROFILE rather than to `true`: portrait burns captions
+   * in because Reels and Shorts are watched muted, landscape does not because
+   * long-form is watched with sound and ships an SRT sidecar instead. A
+   * landscape video that had to remember `showCaptions={false}` would silently
+   * lose 136px of frame the first time somebody forgot.
    */
   readonly showCaptions?: boolean;
   /**
@@ -163,7 +169,7 @@ export const Stage: React.FC<StageProps> = ({
   audioSrc,
   music,
   captions,
-  showCaptions = true,
+  showCaptions: showCaptionsProp,
   layout = 'stack',
   profile = DEFAULT_PROFILE,
   debug = false,
@@ -171,7 +177,10 @@ export const Stage: React.FC<StageProps> = ({
   children,
 }) => {
   const theme = getTheme(themeName);
-  const { captionMaxChars } = PROFILES[profile];
+  const { captionMaxChars, usesCaptions } = PROFILES[profile];
+  // Resolved here rather than as a parameter default, because a default can
+  // only reference parameters declared before it and `profile` comes later.
+  const showCaptions = showCaptionsProp ?? usesCaptions;
   const { fps, width, height } = useVideoConfig();
 
   /*

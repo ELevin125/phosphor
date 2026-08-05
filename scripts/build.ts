@@ -1,7 +1,7 @@
 /**
  * Runs a video's pipeline, skipping stages whose inputs have not changed.
  *
- *   npm run build <slug> [--force] [--dry]
+ *   npm run build <slug> [--force] [--dry] [--no-check] [--samples N]
  *
  * The pipeline is a DAG with undeclared dependencies, and the failure mode is
  * silent: re-record the voiceover, forget to retime, and you get a finished
@@ -28,13 +28,17 @@ import { parse } from 'yaml';
 
 const slug = process.argv[2];
 if (!slug || slug.startsWith('--')) {
-  console.error('usage: npm run build <slug> [--force] [--dry]');
+  console.error('usage: npm run build <slug> [--force] [--dry] [--no-check] [--samples N]');
   process.exit(1);
 }
 
 const args = process.argv.slice(3);
 const FORCE = args.includes('--force');
 const DRY = args.includes('--dry');
+/** Skips the slowest stage for the tight edit loop. */
+const NO_CHECK = args.includes('--no-check');
+const samplesAt = args.indexOf('--samples');
+const CHECK_SAMPLES = samplesAt >= 0 && args[samplesAt + 1] ? Number(args[samplesAt + 1]) : 24;
 
 const ROOT = process.cwd();
 const projectDir = join(ROOT, 'projects', slug);
@@ -97,21 +101,37 @@ const state: State = existsSync(statePath)
   ? (JSON.parse(readFileSync(statePath, 'utf8')) as State)
   : {};
 
-const run = (label: string, script: string, scriptArgs: string[]): void => {
+/**
+ * `fatal: false` runs a stage for its report and carries on regardless.
+ *
+ * The reporting stages exit non-zero to be useful on their own — `check`
+ * returns 1 when it finds anything, so it can gate a commit hook — but a
+ * finding is not a reason to abandon a build that has already done the
+ * expensive work. Treating it as one would just teach everyone to pass
+ * `--no-check`.
+ */
+const run = (
+  label: string,
+  script: string,
+  scriptArgs: string[],
+  { fatal = true }: { fatal?: boolean } = {},
+): number => {
   console.log(`\n▸ ${label}`);
   if (DRY) {
     console.log(`  (dry) would run: ${script} ${scriptArgs.join(' ')}`);
-    return;
+    return 0;
   }
   const r = spawnSync(
     process.execPath,
     [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(ROOT, 'scripts', script), ...scriptArgs],
     { stdio: 'inherit', cwd: ROOT },
   );
-  if (r.status !== 0) {
+  const status = r.status ?? 1;
+  if (status !== 0 && fatal) {
     console.error(`\n✗ ${label} failed — stopping.`);
-    process.exit(r.status ?? 1);
+    process.exit(status);
   }
+  return status;
 };
 
 const skip = (label: string, why: string): void => {
@@ -150,20 +170,34 @@ if (!hasVo) {
     error growing toward the front of the video where the dead air was.
   */
   const newTake = state.voOutput !== undefined && state.voOutput !== voStamp();
-  // First run under this check: establish the stamp rather than guess.
+  /*
+    No state file — a project built before this tracking existed, or one whose
+    state was deleted.
+
+    This used to RUN process-vo "to establish the stamp", which was the wrong
+    way round and cost a recording: process-vo's own new-take detection then had
+    nothing to compare against either, and adopted its own output as the raw
+    original. Both scripts guessing at once is how an unrecoverable action gets
+    taken by a pipeline nobody asked to modify anything.
+
+    Assume instead that an existing vo.wav is current, and say so. If that guess
+    is wrong the fix is `--force`, and the cost is one re-run — where the other
+    direction cost the untouched original.
+  */
   const unknown = state.voOutput === undefined;
   const stale = !existsSync(rawWav) || mtime(wav) < mtime(rawWav);
 
-  if (FORCE || stale || newTake || settingsChanged || unknown) {
+  if (FORCE || stale || newTake || settingsChanged) {
     const why = settingsChanged
       ? 'vo settings changed'
       : newTake
         ? 'new take dropped in'
-        : unknown
-          ? 'no record of the last run'
-          : 'recording is newer';
+        : 'recording is newer';
     console.log(`  (${FORCE ? 'forced' : why})`);
     run('process-vo', 'process-vo.ts', [slug]);
+  } else if (unknown) {
+    skip('process-vo', 'no record of the last run — assuming vo.wav is current');
+    console.log(`    (--force to process it anyway)`);
   } else {
     skip('process-vo', 'vo.wav is up to date');
   }
@@ -230,7 +264,37 @@ run('sync', 'sync-projects.ts', []);
 // is unavoidable, rather than in a QA step someone can forget.
 
 if (existsSync(captions)) {
-  run('captions', 'captions.ts', [slug]);
+  run('captions', 'captions.ts', [slug], { fatal: false });
+}
+
+// ----------------------------------------------------------------------- srt
+// A subtitle sidecar from the same word timings. Long-form burns no captions
+// in, so without this it would ship with none at all — and YouTube's automatic
+// ones are worse than a transcript a human has already corrected at the gate.
+// Costs milliseconds, so it runs whenever there is a transcript to build from.
+
+if (existsSync(captions)) {
+  run('srt', 'srt.ts', [slug]);
+}
+
+// --------------------------------------------------------------------- check
+/*
+  Machine QA. Reports only — like `captions`, it never fails the build.
+
+  Here rather than left to a QA step because the failure it catches is one you
+  cannot see while building and will not think to look for: text a few pixels
+  into the action rail, a beat that holds for twenty seconds, a panel that
+  overflows only between frames 400 and 460.
+
+  It renders stills, so it is the slowest stage by a wide margin. `--no-check`
+  skips it for the tight edit loop; the closing hint below then says so, because
+  a skipped check that nobody mentions is the same as no check at all.
+*/
+let checkFindings = 0;
+if (!NO_CHECK && existsSync(generated)) {
+  checkFindings = run('check', 'check.ts', [slug, '--samples', String(CHECK_SAMPLES)], {
+    fatal: false,
+  });
 }
 
 if (!DRY) {
@@ -248,7 +312,11 @@ if (!DRY) {
 }
 
 console.log(`\n✓ ${slug} is built.`);
+if (NO_CHECK) {
+  console.log(`  ! check was skipped — run 'npm run check ${slug}' before rendering`);
+} else if (checkFindings !== 0) {
+  console.log(`  ! check found something above — fix it before rendering`);
+}
 console.log(`  preview:  npm run studio`);
-console.log(`  check:    npm run check ${slug}          <- run this first`);
 console.log(`  stills:   ./scripts/contact-sheet.sh ${slug}-gizmo`);
 console.log(`  render:   ./scripts/render.sh ${slug}-gizmo --deliver`);

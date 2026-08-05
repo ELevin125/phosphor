@@ -71,6 +71,27 @@ const FUNCTION_WORDS = new Set([
 ]);
 
 /**
+ * Words whose absence reverses the sentence.
+ *
+ * Priced far above an ordinary stranded function word, and the reason is not
+ * aesthetic. `second-listener` shipped with a caption reading "a very good
+ * solution," held alone for a second and a half over the naive code, while the
+ * voice said "this is NOT a very good solution" — so a muted viewer, which on
+ * Shorts is most of them, read the exact opposite of the argument at the moment
+ * it was being made. Every other bad break in this file makes a caption awkward.
+ * These make it false, and no amount of length awkwardness is worse than that.
+ *
+ * `not` and `too` are also in `LEANS_BACK` — that entry stops them being
+ * orphaned at the START of a phrase, this one stops them being stranded at the
+ * end. Both directions of the same word are wrong for the same reason.
+ */
+const NEGATIONS = new Set([
+  'not', "n't", 'no', 'never', 'none', 'nothing', 'without', 'cannot',
+  "can't", "won't", "don't", "doesn't", "isn't", "aren't", "wasn't",
+  "weren't", "shouldn't", "wouldn't", "couldn't", 'nor', 'neither',
+]);
+
+/**
  * Particles that attach BACKWARD, to the word before them.
  *
  * The mirror of `FUNCTION_WORDS`, and needed for the same reason: "Enemy health
@@ -102,15 +123,52 @@ const CLAUSE_END = /[,;:]["')\]]?$/;
  * costs more than making a phrase one word too long.
  */
 const breakCost = (word: string, next: string | undefined): number => {
-  // End of a segment. The break is already forced, so it is free.
+  /*
+    End of a segment — a beat boundary, or the end of the video.
+
+    NOT free, which is what it used to return on the grounds that the break is
+    forced so there is nothing to decide. There is: the break is fixed, but
+    WHERE THE PHRASE BEFORE IT STARTS is not, and charging nothing meant the
+    grouper had no reason to prefer a segment ending on a full stop over one
+    ending on "and". Six of seven beats in `second-listener` ended on a stranded
+    conjunction, two of them still do after `snapToSentences`, and the cost
+    function could not see any of it.
+
+    Priced the same as an ordinary break rather than as a free one, so the
+    grouper spends a little length cost to land the segment somewhere sane. It
+    cannot be avoided entirely — the boundary is where it is — so pricing it
+    above a normal break would only distort the phrases leading up to it.
+  */
   if (next === undefined) {
-    return 0;
+    return SENTENCE_END.test(word) ? 0 : CLAUSE_END.test(word) ? 2 : 6;
   }
   if (SENTENCE_END.test(word)) {
     return 0;
   }
   if (CLAUSE_END.test(word)) {
     return 2;
+  }
+  /*
+    Negations lead. Breaking BEFORE one is a good break, not a neutral one.
+
+    Forbidding the bad split is only half the repair — "Now this is not" costs
+    44 now, but "Now this is not a" costs 14 and still separates the negation
+    from what it negates by a word. The break that actually wants to happen is
+    "Now this is" / "not a very good solution," and it was losing because `is`
+    is an auxiliary and ending on one costs 14. Pricing the approach to a
+    negation below a plain break lets it win, and it generalises: a negation
+    opens its own scope, so it belongs at the head of a caption.
+  */
+  if (next !== undefined && NEGATIONS.has(key(next))) {
+    return 3;
+  }
+  /*
+    Only ever ENDING on a negation. Tested before the function-word rule,
+    because most of these are function words too and 14 is not remotely enough
+    to outbid a flat-bottomed length cost.
+  */
+  if (NEGATIONS.has(key(word))) {
+    return 44;
   }
   if (FUNCTION_WORDS.has(key(word))) {
     return 14;
@@ -266,6 +324,52 @@ const snapToSentences = (
   return snapped.sort((a, b) => a - b);
 };
 
+/**
+ * Words that open the next thought, and so must never close this one.
+ *
+ * A subset of `FUNCTION_WORDS`: those are simply weak to end on, whereas these
+ * are actively pointing at a clause that has not arrived yet. A caption ending
+ * on one is the most conspicuous way for a subtitle to look broken.
+ */
+const CONNECTIVES = new Set([
+  'and', 'or', 'but', 'so', 'because', 'which', 'when', 'while', 'then',
+  'now', 'if', 'though', 'although', 'since', 'unless', 'until', 'whereas',
+]);
+
+/**
+ * Pushes a trailing connective across a beat split, into the beat it belongs to.
+ *
+ * `snapToSentences` handles the case where the boundary is a word away from a
+ * full stop. This handles the case where there is no full stop to snap to,
+ * which is what a run-on read produces: `second-listener` ends its first beat
+ * on "across players and the enemies and", where the "and" opens the sentence
+ * the NEXT beat is about to say. The grouper cannot fix that on its own — a
+ * word can only be grouped inside the segment it was given, so the repair has
+ * to happen at the split.
+ *
+ * Runs after the sentence snap and defers to it: a split already sitting on a
+ * full stop is correct and is left alone. Moves at most one word, and only
+ * across words already spoken adjacently, so it invents no timing — the same
+ * guarantee `snapToSentences` makes.
+ */
+const unstrandConnectives = (
+  captions: readonly Caption[],
+  splits: readonly number[],
+): number[] =>
+  splits.map((split) => {
+    const previous = captions[split - 1];
+    if (!previous || split <= 1) {
+      return split;
+    }
+    const text = previous.text.trim();
+    // Punctuation means the word closes something rather than opening it —
+    // "and," and "so." are ends, whatever the word itself usually does.
+    if (SENTENCE_END.test(text) || CLAUSE_END.test(text)) {
+      return split;
+    }
+    return CONNECTIVES.has(key(text)) ? split - 1 : split;
+  });
+
 /** Cuts a flat word list into segments at the given indices. */
 const splitAt = <T>(items: readonly T[], splits: readonly number[]): T[][] => {
   const out: T[][] = [];
@@ -318,7 +422,10 @@ export const phrasesFromCaptions = (
     }
   });
 
-  const segments = splitAt(captions, snapToSentences(captions, splits));
+  const segments = splitAt(
+    captions,
+    unstrandConnectives(captions, snapToSentences(captions, splits)),
+  );
 
   const phrases = segments
     .flatMap((segment) => groupWords(segment, maxChars))

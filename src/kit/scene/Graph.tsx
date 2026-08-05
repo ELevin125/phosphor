@@ -243,34 +243,85 @@ export const Graph: React.FC<GraphProps> = ({
           middle 40% so the thin part is brief and the arrow spends most of the
           reversal legible.
         */
-        const t = 0.07 + 0.86 * smoothstep(k);
-        const hx = x1 + (x2 - x1) * t;
-        const hy = y1 + (y2 - y1) * t;
         const angle = (Math.atan2(uy, ux) * 180) / Math.PI;
         const flip = 2 * smoothstep((k - 0.3) / 0.4) - 1;
+
+        /*
+          The TIP travels the shaft, not the head's centre.
+
+          Placing the centre at a fraction of the way along left half a head
+          plus the remaining fraction of shaft sticking out through the point of
+          the arrow — the line visibly overshot its own head, which reads as a
+          rendering fault rather than as a diagram. Driving the tip means the
+          arrow ends where the arrow ends, and the shaft can be cut to meet it.
+        */
+        const half = head * 0.5;
+        const tip = span * smoothstep(k);
+        const hx = x1 + ux * (tip - flip * half);
+        const hy = y1 + uy * (tip - flip * half);
+
+        /*
+          The wire is drawn in two pieces with the head's own footprint cut out
+          of the middle, rather than as one line trimmed at one end.
+
+          Trimming one end was the obvious repair and it is wrong, because the
+          head does not stay at an end — it slides the whole length during a
+          reversal. Cut the far end to a head sitting halfway along and the wire
+          visibly retracts from the box it is pointing at, which is a worse
+          artefact than the overshoot it replaced.
+
+          Removing only what the head covers is correct at every position it can
+          be in. At an end, one piece is empty and the other stops at the head's
+          base, so nothing protrudes past the point. Halfway, both pieces exist
+          and meet exactly where the head is, so the wire reads as continuous —
+          which it should, because mid-turn the head is edge-on and there is
+          nothing there to hide behind.
+        */
+        // The head fades in over the last tenth of the draw-on, so the wire
+        // gives up its middle over exactly the same tenth. Cutting on `r > 0.9`
+        // alone would open a gap a head wide with nothing yet drawn in it.
+        const headIn = smoothstep((r - 0.9) / 0.1);
+        const back = tip - 2 * flip * half * headIn;
+        const lo = Math.min(back, tip);
+        const hi = Math.max(back, tip);
 
         const color = toneColor(colors, e.tone ?? edgeTone);
         const p = e.pulse ?? pulse;
 
         return (
           <g key={`e${i}`} opacity={r}>
-            <line
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={color}
-              strokeWidth={draw.strokeWidth * 1.4}
-              strokeLinecap="round"
-            />
+            {/*
+              Round caps are safe here even though this is an overshoot fix: the
+              only cap that lands next to the head is the one at the head's base,
+              and it pokes half a stroke width INTO a triangle filled with the
+              same colour. Past the point, where the overshoot was visible, there
+              is no cap at all — that end of the wire does not exist.
+            */}
+            {[
+              [0, lo],
+              [hi, span],
+            ].map(([a0, a1], s) =>
+              a1! - a0! < 0.5 ? null : (
+                <line
+                  key={`s${s}`}
+                  x1={x1 + ux * a0!}
+                  y1={y1 + uy * a0!}
+                  x2={x1 + ux * a1!}
+                  y2={y1 + uy * a1!}
+                  stroke={color}
+                  strokeWidth={draw.strokeWidth * 1.4}
+                  strokeLinecap="round"
+                />
+              ),
+            )}
             {r > 0.9 ? (
               <path
-                d={`M ${head * 0.5} 0 L ${-head * 0.5} ${head * 0.42} L ${-head * 0.5} ${-head * 0.42} Z`}
+                d={`M ${half} 0 L ${-half} ${head * 0.42} L ${-half} ${-head * 0.42} Z`}
                 fill={color}
                 // The line finishes drawing at r=1 and the head was appearing
                 // at full size on the frame r crossed 0.9 — a pop on the one
                 // element the eye is already tracking to the end of the line.
-                opacity={smoothstep((r - 0.9) / 0.1)}
+                opacity={headIn}
                 transform={`translate(${hx} ${hy}) rotate(${angle}) scale(${flip} 1)`}
               />
             ) : null}
