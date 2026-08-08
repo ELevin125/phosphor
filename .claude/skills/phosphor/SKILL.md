@@ -312,6 +312,30 @@ an image costs far more to read than a line of text.
 Caption *phrasing* is a third thing again — `npm run captions`, scored in
 milliseconds, because a sheet samples too few frames to catch a bad break.
 
+## 3. What neither check can see — read the code for this
+
+**Both checks look at frames in isolation.** `check` measures independently
+sampled stills; a contact sheet *is* stills. So there is an entire class of
+defect where **every individual frame is correct and the sequence is broken**,
+and no amount of sampling will surface it:
+
+- an element that pops between positions frame to frame,
+- a value that flickers because it is recomputed from changing state,
+- a highlight that changes which object it is on.
+
+`spatial-hash` shipped a live one: the agent its two focus beats were about was
+chosen by scanning the crowd for "most isolated" and "busiest neighbourhood"
+**every frame**. As the crowd moved, those were different agents — so the ring
+and the lit block would have jumped around for the whole shot. `check` was
+clean, the sheet looked right, and it was found by re-reading the source.
+
+> **A selection is not a per-frame computation.** Which agent, which cell, which
+> item — resolve it once and hold it. If it depends on simulation state, resolve
+> it at a fixed time at module scope, not from the state of the current frame.
+
+The general rule: after the mechanical and judgement passes, **re-read anything
+that picks, sorts or ranks**. That is where the invisible bugs live.
+
 **Only tell the user it's done when check is clean and a sheet has been read
 since the last edit.** Never report a scene as finished on the strength of a
 successful render — a render exits 0 with text hanging off the frame.

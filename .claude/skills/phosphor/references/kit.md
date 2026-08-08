@@ -231,6 +231,27 @@ a `Scene` inside it sizes to the pane rather than the content box.
 Footage must be pre-processed: editor chrome cropped off, converted to the
 composition fps, audio stripped. See `references/style.md`.
 
+### Music — and how to tell whether it is actually there
+
+`<Stage music={{ track, seed, under }}>`. **It is easy to ship a video with no
+bed at all: omitting the prop is silent, and no check has an opinion about it.**
+`spatial-hash` shipped its first render that way.
+
+Verifying it by ear is the expensive path, and the obvious measurement does not
+work — a bed 17dB under the voice raises the total level by **0.1dB** during
+speech, so `volumedetect`'s mean over any narrated window reads identically with
+and without music. Measure the **noise floor** instead, where nothing is
+competing with it:
+
+```bash
+ffmpeg -hide_banner -ss 8 -t 38 -i out/<slug>/renders/<id>-001.mp4 \
+  -af astats=metadata=1:reset=0 -f null /dev/null 2>&1 | grep "Noise floor"
+```
+
+On `spatial-hash` that reads −51dB with no bed, −32dB at `under: 17`, −30dB at
+`under: 13`. Do not measure the first or last second: `Music` fades the bed in
+and out, so both ends read as no music whatever the setting.
+
 ### `<Arrow>`
 Connector. `direction`, `length`, `tone`, `label?`, `delay?`.
 Draws on with a stroke-dash reveal rather than fading.
@@ -310,6 +331,25 @@ const history = useSimHistory({ init, step, hz, stride, keep }); // for trails
   running across beat boundaries. `time: 'beat'` restarts it.
 - `keep` caps trail length. Without it, a trail on composition time holds twenty
   seconds of history by the last beat and stops being a trail.
+
+**Run a sim standalone before building beats on it**, as a throwaway `tsx`
+script that steps it and prints state. It takes under a second for a whole
+video and it is the cheapest step in the pipeline; discovering the same thing
+from a contact sheet costs a bundle, a render and a round trip.
+
+Print the numbers the narration will quote **and the ones that decide whether
+the picture is legible** — those are different, and the second is the one that
+gets skipped. For a crowd on a grid: occupancy around a third of cells is a
+crowd with gaps a grid can sort and a line can cross. `spatial-hash` first ran
+150 agents over 252 cells, which is near-full hexagonal packing; the numbers
+were all correct and it rendered as a solid disc.
+
+**In-beat timings are absolute seconds and do not survive a retime.** A constant
+like `OUTRO_AT = 4.1` is measured from the beat's start, and retime changes
+every beat's length — `spatial-hash`'s payoff went 7.4s → 9.2s and silently
+handed the whole difference to the shot after that cut. Where the intent is
+proportional ("the last third"), write it as a fraction of the beat; where it is
+genuinely absolute, re-check it after the VO lands.
 
 ## Drawables
 
@@ -402,6 +442,18 @@ and the plot maps it into the box, so resizing never means rescaling by hand.
 A `Tag` moves with the thing it names, so the viewer never has to work out which
 object "the slow one" refers to. That property removes most of the need for
 panels.
+
+**`Readout`'s defaults are tuned for a measured quantity beside a moving object,
+and are wrong for a count on the centre line.** They are `digits: 2` and
+`anchor: 'right'`, so an integer renders as `22350.00` and grows rightward off
+the frame. `spatial-hash` opened with 47 `check` findings from exactly this, in
+one pass. For counts: `digits: 0`, and `anchor: 'above' | 'below'`, which are
+the only two anchors that centre horizontally.
+
+**A `Tag` that follows a wandering object needs its x clamped**, or it leaves
+the content box the moment its subject nears an edge. Derive the bound rather
+than guessing it: a centre-anchored tag needs its anchor point half its own
+width inside each edge, and the scene's world-units-per-pixel is known.
 
 `CodeTag` auto-shrinks to fit the scene — a truncated line of code is worse than
 a small one, because the part that falls off the edge is always the part the

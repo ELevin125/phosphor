@@ -196,6 +196,28 @@ const meta = (slug: string): Meta => {
 
 const isArchived = (slug: string): boolean => meta(slug).archived;
 
+/**
+ * The runtime that actually shipped, in seconds, once a VO has been retimed.
+ *
+ * This exists because every other runtime in this file is an ESTIMATE, and the
+ * estimate is not the number rule 1 is about. `spatial-hash` validated at
+ * exactly 50.0s here and was delivered at 52.7s, because the read improvised
+ * about thirty words — and nothing in the pipeline said so. Reach is scored on
+ * the fraction of the delivered video watched, so the delivered length is the
+ * only one that costs anything.
+ *
+ * Read from `beats.generated.ts` rather than beats.yaml: build-beats writes it
+ * from whatever retime last produced, so it cannot disagree with the render.
+ */
+const deliveredSeconds = (slug: string): number | null => {
+  const path = join(PROJECTS, slug, 'beats.generated.ts');
+  if (!existsSync(path)) return null;
+  const src = readFileSync(path, 'utf8');
+  const frames = Number(/export const TOTAL_FRAMES = (\d+)/.exec(src)?.[1]);
+  const fps = Number(/export const FPS = (\d+)/.exec(src)?.[1]);
+  return Number.isFinite(frames) && Number.isFinite(fps) && fps > 0 ? frames / fps : null;
+};
+
 /** The same beats, read from beats.yaml when script.md defers to it. */
 const parseBeatsYaml = (dir: string): Beat[] => {
   const path = join(dir, 'beats.yaml');
@@ -356,6 +378,31 @@ const review = (slug: string, verbose: boolean): boolean => {
       level: '!',
       text: `no beat starts between ${SECOND_LOOP_MIN}s and ${SECOND_LOOP_MAX}s — nothing can open a second loop there (RETENTION.md#7)`,
     });
+  }
+
+  /*
+    Once a VO exists the estimate stops being the interesting number. Reported
+    separately rather than replacing the figure above, because the gap between
+    the two is itself worth seeing: it is how much the read improvises, and it
+    is the correction to apply when writing the NEXT script.
+  */
+  const delivered = deliveredSeconds(slug);
+  if (delivered !== null) {
+    const drift = delivered - total;
+    if (short && (delivered < RUNTIME_MIN || delivered > RUNTIME_MAX)) {
+      notes.push({
+        level: '!',
+        text:
+          `DELIVERED runtime ${delivered.toFixed(1)}s is outside ${RUNTIME_MIN}-${RUNTIME_MAX}s ` +
+          `(script estimated ${total.toFixed(1)}s, read ran ${drift >= 0 ? '+' : ''}${drift.toFixed(1)}s). ` +
+          `Write the next script ${Math.abs(drift).toFixed(0)}s shorter (RETENTION.md#1)`,
+      });
+    } else if (Math.abs(drift) > 2) {
+      notes.push({
+        level: '!',
+        text: `read ran ${drift >= 0 ? '+' : ''}${drift.toFixed(1)}s against the estimate — delivered ${delivered.toFixed(1)}s`,
+      });
+    }
   }
 
   // The header states a runtime; the table is what it is built from.
