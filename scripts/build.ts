@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import { decideProcessVo, decideTranscribe } from './vo-state';
 
 const slug = process.argv[2];
 if (!slug || slug.startsWith('--')) {
@@ -102,6 +103,40 @@ const state: State = existsSync(statePath)
   : {};
 
 /**
+ * Record what this run has actually done, so the next one does not redo it.
+ *
+ * Called at every point the build legitimately STOPS, not only when it reaches
+ * the end — which is the distinction that was missing and it cost a loop no
+ * amount of re-running could escape:
+ *
+ *   transcript gate exits without writing state
+ *     -> next run still holds the previous build's voOutput
+ *     -> `newTake` is true, so process-vo runs and rewrites vo.wav
+ *     -> vo.wav is now newer than transcript.md
+ *     -> needsTranscribe is true, so it transcribes and stops at the gate again
+ *
+ * A pause for human review is a successful outcome. process-vo and transcribe
+ * both really completed, and refusing to record that is what makes them repeat.
+ * A genuine stage FAILURE still exits without writing, which is correct — there
+ * the work did not happen.
+ *
+ * `scriptHash()` is re-read rather than reusing `scriptNow`: retime rewrites
+ * beats.yaml, so storing the pre-run hash would make the next build think the
+ * narration had changed again.
+ */
+const remember = (): void => {
+  if (DRY) return;
+  writeFileSync(
+    statePath,
+    JSON.stringify(
+      { voSettings: settingsNow, voScript: scriptHash(), voOutput: voStamp() },
+      null,
+      2,
+    ),
+  );
+};
+
+/**
  * `fatal: false` runs a stage for its report and carries on regardless.
  *
  * The reporting stages exit non-zero to be useful on their own — `check`
@@ -158,36 +193,24 @@ const voStamp = (): string =>
 if (!hasVo) {
   skip('process-vo', 'no recording yet');
 } else {
-  const settingsChanged = state.voSettings !== undefined && state.voSettings !== settingsNow;
-  /*
-    A vo.wav that does not match the one this pipeline last produced is a new
-    take that has been dropped in, and it has to be processed before anything
-    downstream reads it.
+  // The decision itself lives in vo-state.ts, where it is unit tested — the
+  // failures it guards are silent, and every stage exits 0 either way.
+  const decision = decideProcessVo({
+    force: FORCE,
+    hasRaw: existsSync(rawWav),
+    wavMtime: mtime(wav),
+    rawMtime: mtime(rawWav),
+    lastOutput: state.voOutput,
+    outputNow: voStamp(),
+    lastSettings: state.voSettings,
+    settingsNow,
+  });
 
-    This is not a nicety. The default silence trim cuts about a second, so an
-    unprocessed take is a DIFFERENT LENGTH from the processed one — transcribe
-    first and every caption timestamp is out by the trim, silently, with the
-    error growing toward the front of the video where the dead air was.
-  */
-  const newTake = state.voOutput !== undefined && state.voOutput !== voStamp();
-  /*
-    No state file — a project built before this tracking existed, or one whose
-    state was deleted.
+  const settingsChanged = decision.why === 'settings';
+  const newTake = decision.why === 'new-take';
+  const unknown = decision.why === 'unknown';
 
-    This used to RUN process-vo "to establish the stamp", which was the wrong
-    way round and cost a recording: process-vo's own new-take detection then had
-    nothing to compare against either, and adopted its own output as the raw
-    original. Both scripts guessing at once is how an unrecoverable action gets
-    taken by a pipeline nobody asked to modify anything.
-
-    Assume instead that an existing vo.wav is current, and say so. If that guess
-    is wrong the fix is `--force`, and the cost is one re-run — where the other
-    direction cost the untouched original.
-  */
-  const unknown = state.voOutput === undefined;
-  const stale = !existsSync(rawWav) || mtime(wav) < mtime(rawWav);
-
-  if (FORCE || stale || newTake || settingsChanged) {
+  if (decision.run) {
     const why = settingsChanged
       ? 'vo settings changed'
       : newTake
@@ -222,7 +245,13 @@ if (!existsSync(wav)) {
   skip('retime', 'no vo.wav to transcribe');
 } else {
   const scriptChanged = state.voScript !== undefined && state.voScript !== scriptNow;
-  const needsTranscribe = FORCE || mtime(review) < mtime(wav) || scriptChanged;
+  const needsTranscribe = decideTranscribe({
+    force: FORCE,
+    reviewMtime: mtime(review),
+    wavMtime: mtime(wav),
+    lastScript: state.voScript,
+    scriptNow,
+  });
 
   if (needsTranscribe) {
     if (scriptChanged) {
@@ -230,6 +259,8 @@ if (!existsSync(wav)) {
     }
     run('transcribe', 'retime.ts', [slug, ...(FORCE ? ['--force'] : [])]);
     if (!DRY) {
+      // Before the exit, or re-running lands back here forever. See `remember`.
+      remember();
       console.log('\n⏸  Build paused for transcript review.');
       console.log('   Check the words above, fix any that are wrong in');
       console.log(`   projects/${slug}/transcript.md, then run this again.`);
@@ -297,19 +328,7 @@ if (!NO_CHECK && existsSync(generated)) {
   });
 }
 
-if (!DRY) {
-  // Re-hashed rather than reusing `scriptNow`: retime rewrites beats.yaml, and
-  // storing the pre-run hash would make the next build think the narration had
-  // changed again.
-  writeFileSync(
-    statePath,
-    JSON.stringify(
-      { voSettings: settingsNow, voScript: scriptHash(), voOutput: voStamp() },
-      null,
-      2,
-    ),
-  );
-}
+remember();
 
 console.log(`\n✓ ${slug} is built.`);
 if (NO_CHECK) {
